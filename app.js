@@ -1,7 +1,7 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '3.0';
+const VERSION = '3.1';
 const $ = id => document.getElementById(id);
 const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
@@ -599,7 +599,7 @@ function parseLocal(text0){
 }
 
 /* ---------- Auswertung (Claude) ---------- */
-async function parseAI(text, key){
+async function parseAI(text, key, img){
   const d = D.get();
   const list = k => CAT.get(k).map(e => `${e.n} (${e.u})`).join(', ');
   const learned = ['mat', 'ger'].flatMap(k => Object.entries(d.alias[k]).map(([raw, t]) => `${raw} → ${t.n}`)).concat(Object.entries(d.vocab).map(([a, b]) => `${a} → ${b}`));
@@ -609,13 +609,15 @@ Regeln: "anfahrt": "Ja", wenn eine Anfahrt/Fahrt zur Baustelle erwähnt wird, "N
 Bekannte Materialnamen (Standard-Einheit): ${list('mat')}.
 Bekannte Geräte: ${list('ger')}.
 Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- oder Hörfehlern.${learned.length ? '\nGelernte Zuordnungen (gesprochen → richtig): ' + learned.join('; ') + '.' : ''}`;
-  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 40000);
+  const sysFull = sys + (img ? '\nDie Eingabe ist ein FOTO eines handschriftlichen oder gedruckten Tagesrapports. Lies alles sorgfältig, auch Tabellen, Stichpunkte und Mengenangaben. Unleserliches NICHT erfinden, sondern weglassen. Ergänze im JSON zusätzlich: "abschrift" (vollständige Abschrift des gelesenen Textes) und "kopf": {"datum":"JJJJ-MM-TT","objekt":"","kunde":"","mitarbeiter":"","von":"HH:MM","bis":"HH:MM","pause":"Minuten als Zahl"} – Kopfdaten nur, wenn sie im Bild stehen, sonst leere Zeichenfolge.' : '');
+  const content = img ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } }, { type: 'text', text: 'Lies diesen Tagesrapport und werte ihn aus.' }] : text;
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), img ? 90000 : 40000);
   let r;
   try {
     r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', signal: ctl.signal,
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 2500, system: sys, messages: [{ role: 'user', content: text }] })
+      body: JSON.stringify({ model: MODEL, max_tokens: 3500, system: sysFull, messages: [{ role: 'user', content }] })
     });
   } finally { clearTimeout(to); }
   if (r.status === 401) { const e = new Error('Schlüssel ungültig'); e.auth = true; throw e; }
@@ -632,7 +634,7 @@ Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- o
       return { name, menge: num(x.menge), einheit: un, raw: rawName };
     });
   };
-  return { taetigkeit: applyVocab(o.taetigkeit || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '', anfahrt: /^(ja|nein)$/i.test(o.anfahrt || '') ? cap(String(o.anfahrt).toLowerCase()) : '', anfahrtInfo: o.anfahrtInfo || '' };
+  return { abschrift: o.abschrift || '', kopf: o.kopf || null, taetigkeit: applyVocab(o.taetigkeit || o.abschrift || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '', anfahrt: /^(ja|nein)$/i.test(o.anfahrt || '') ? cap(String(o.anfahrt).toLowerCase()) : '', anfahrtInfo: o.anfahrtInfo || '' };
 }
 
 $('ki').onclick = async () => {
@@ -645,6 +647,10 @@ $('ki').onclick = async () => {
     if (key && navigator.onLine) res = await parseAI(text, key); else { res = parseLocal(text); how = 'Katalog'; }
   } catch(e){ res = parseLocal(text); how = e.auth ? 'Katalog – API-Schlüssel ungültig' : 'Katalog – KI nicht erreichbar'; }
   b.disabled = false; b.textContent = old;
+  applyRes(res, how);
+};
+
+function applyRes(res, how){
   const ta = $('taetigkeit');
   if (res.taetigkeit){
     if (!ta.value.trim()) ta.value = res.taetigkeit;
@@ -661,6 +667,33 @@ $('ki').onclick = async () => {
   if (res.anfahrt && !$('anfahrt').value){ $('anfahrt').value = res.anfahrt; if (res.anfahrtInfo && !$('anfahrtInfo').value) $('anfahrtInfo').value = res.anfahrtInfo; }
   updateStd(); markDirty();
   toast(`Ausgewertet (${how}): ${res.material.length} Material, ${res.geraete.length} Geräte – bitte prüfen. Korrekturen merkt sich die App.`, 5000);
+}
+
+/* ---------- Rapport scannen (Foto eines handschriftlichen Rapports) ---------- */
+$('scan').onclick = () => {
+  if (!(S.get().key || '').trim()) return toast('Zum Scannen von Handschrift wird der Claude-API-Key aus den Einstellungen benötigt (KI-Auswertung).', 6000);
+  if (!navigator.onLine) return toast('Zum Scannen ist eine Internetverbindung nötig.', 4000);
+  $('scanFile').click();
+};
+$('scanFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const b = $('scan'); b.disabled = true; const old = b.textContent; b.textContent = '… liest Rapport';
+  try {
+    const p = await compress(f, 2000, 0.85);
+    const res = await parseAI('', (S.get().key || '').trim(), p.data);
+    const k = res.kopf || {};
+    const setIf = (id, v) => { v = String(v || '').trim(); if (v && !$(id).value) $(id).value = v; };
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k.datum || '')) setIf('datum', k.datum);
+    setIf('objekt', k.objekt); setIf('kunde', k.kunde); setIf('mitarbeiter', k.mitarbeiter);
+    const hm = v => { const m = String(v || '').match(/^(\d{1,2})[:.](\d{2})$/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };
+    setIf('von', hm(k.von || k.beginn)); setIf('bis', hm(k.bis)); if (k.pause && num(k.pause) != null) setIf('pause', String(num(k.pause)));
+    if (res.abschrift) $('diktat').value = ($('diktat').value.trim() ? $('diktat').value.trim() + '\n\n' : '') + res.abschrift;
+    applyRes(res, 'Scan');
+    if (confirm('Den Scan auch als Foto an den Rapport anhängen (Dokumentation im PDF)?')){ cur.fotos.push({ data: p.data, w: p.w, h: p.h, text: 'Handschriftlicher Rapport (Scan)' }); renderPhotos(); }
+    liveScan(); updateStd(); markDirty();
+  } catch(err){
+    toast(err && err.auth ? 'API-Schlüssel ungültig.' : 'Scan fehlgeschlagen: ' + (err && err.message || err) + ' – bitte ein gut beleuchtetes, gerades Foto versuchen.', 6000);
+  } finally { b.disabled = false; b.textContent = old; }
 };
 
 /* ---------- Lernen aus Rapporten ---------- */

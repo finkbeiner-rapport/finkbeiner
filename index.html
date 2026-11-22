@@ -133,7 +133,9 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
     <div class="bar">
       <button class="btn" id="mic" type="button">🎤 Sprechen</button>
       <button class="btn grn" id="ki" type="button">✨ Auswerten</button>
+      <button class="btn sec" id="scan" type="button">📷 Rapport scannen</button>
       <button class="btn sec" id="diktClear" type="button">Leeren</button>
+      <input type="file" id="scanFile" accept="image/*" class="hide">
     </div>
     <div class="hint" id="micHint"></div>
   </section>
@@ -230,7 +232,7 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
     <h2>KI-Auswertung</h2>
     <label for="s_key">Claude-API-Key (optional)</label>
     <input id="s_key" type="password" autocomplete="off" placeholder="sk-ant-…">
-    <div class="hint">Der Schlüssel wird nur auf diesem Gerät gespeichert. Ohne Schlüssel (oder ohne Netz) wertet die App das Diktat mit einfacher Mustererkennung aus: Menge + Einheit + Bezeichnung.</div>
+    <div class="hint">Der Schlüssel wird nur auf diesem Gerät gespeichert. Der Schlüssel wird auch zum <b>Scannen handschriftlicher Rapporte</b> gebraucht. Ohne Schlüssel (oder ohne Netz) wertet die App das Diktat mit einfacher Mustererkennung aus: Menge + Einheit + Bezeichnung.</div>
   </section>
   <div class="bar" style="margin:0 0 12px"><button class="btn" id="saveSet" type="button" style="width:100%">Einstellungen speichern</button></div>
   <section class="card">
