@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tagesrapport – Fliesen Finkbeiner</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f4e79" id="themeColor">
+<meta name="application-name" content="Rapport">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rapport">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{--blau:#1f4e79;--grau:#f2f4f7;--rand:#d5dae1;--text:#1b2430;--rot:#c0392b;--gruen:#1e8449}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--grau);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+#top{position:sticky;top:0;z-index:10}
+header{background:var(--blau);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;display:flex;align-items:center;gap:10px;min-height:56px}
+header .t{flex:1}
+header h1{margin:0;font-size:18px;line-height:1.2}
+header small{opacity:.85}
+#hlogo{display:none;max-height:38px;max-width:120px;background:#fff;border-radius:6px;padding:3px 6px}
+nav{display:flex;background:#fff;border-bottom:1px solid var(--rand)}
+nav button{flex:1;padding:12px 4px;border:0;background:none;font:inherit;font-size:15px;font-weight:600;color:#6b7785;border-bottom:3px solid transparent}
+nav button.on{color:var(--blau);border-bottom-color:var(--blau)}
+main{padding:12px 12px calc(110px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
+section.card{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px;margin-bottom:12px}
+section.card h2{margin:0 0 8px;font-size:16px;color:var(--blau)}
+label{display:block;font-size:13px;color:#566170;margin:8px 0 3px}
+input,select,textarea{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--rand);border-radius:8px;background:#fff;color:var(--text);min-width:0}
+input[readonly]{background:#f2f4f7;color:#566170}
+textarea{min-height:110px;resize:vertical}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 14px;border:0;border-radius:10px;background:var(--blau);color:#fff;font:inherit;font-weight:600;font-size:15px}
+.btn.sec{background:#e6ebf1;color:var(--blau)}
+.btn.red{background:var(--rot)}.btn.grn{background:var(--gruen)}
+.btn.rec{background:var(--rot);animation:p 1s infinite}
+@keyframes p{50%{opacity:.6}}
+.btn[disabled]{opacity:.5}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.item{display:grid;grid-template-columns:minmax(0,1fr) 74px 82px 34px;gap:6px;margin-bottom:6px;align-items:center}
+.item input,.item select{padding:9px 6px}
+.item .x{border:0;background:none;font-size:20px;color:var(--rot)}
+.colh{display:grid;grid-template-columns:minmax(0,1fr) 74px 82px 34px;gap:6px;font-size:11px;color:#6b7785;margin-bottom:2px}
+.hint{font-size:12px;color:#6b7785;margin:4px 0}
+.photos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.photo{position:relative;border:1px solid var(--rand);border-radius:8px;overflow:hidden}
+.photo img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}
+.photo input{border:0;border-top:1px solid var(--rand);border-radius:0;padding:6px;font-size:14px}
+.photo .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:30px;height:30px}
+canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;background:#fff;touch-action:none;display:block;-webkit-user-select:none;user-select:none}
+.bottom{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--rand);padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:20}
+.bottom .btn{flex:1}
+.list .it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--rand)}
+.list .it .m{min-width:0}
+.list .it b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#e6ebf1;color:var(--blau);margin-left:4px}
+.badge.v{background:#d5f0df;color:var(--gruen)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));background:#222;color:#fff;padding:10px 16px;border-radius:20px;z-index:60;max-width:90%;font-size:14px;display:none;text-align:center}
+#inst{display:none;background:#fff7d6;border:1px solid #ecd98a;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+#inst .bar{margin-top:6px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:flex-end;justify-content:center}
+#modal .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+#modal h3{margin:0 0 4px;color:var(--blau)}
+#modal .btn{width:100%;margin-top:8px}
+#logoPrev{max-height:60px;max-width:200px;display:none;border:1px solid var(--rand);border-radius:6px;padding:4px;margin-top:6px;background:#fff}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="top">
+  <header>
+    <img id="hlogo" alt="Logo">
+    <div class="t"><h1 id="hfirma">Fliesen Finkbeiner</h1><small>Tagesrapport</small></div>
+  </header>
+  <nav>
+    <button data-v="neu" class="on">Rapport</button>
+    <button data-v="archiv">Archiv</button>
+    <button data-v="set">Einstellungen</button>
+  </nav>
+</div>
+
+<main>
+<!-- ============ NEUER RAPPORT ============ -->
+<div id="v-neu">
+  <div id="inst"></div>
+
+  <section class="card">
+    <h2>Baustelle</h2>
+    <div class="row">
+      <div><label for="datum">Datum</label><input type="date" id="datum"></div>
+      <div><label for="nr">Rapport-Nr.</label><input id="nr" placeholder="automatisch"></div>
+    </div>
+    <label for="objekt">Objekt / Baustelle</label><input id="objekt" placeholder="z. B. EFH Müller, Bad OG" autocomplete="off">
+    <div class="row">
+      <div><label for="projekt">Projekt-/Auftrags-Nr.</label><input id="projekt" autocomplete="off"></div>
+      <div><label for="wetter">Wetter</label><input id="wetter" placeholder="z. B. trocken, 8 °C" autocomplete="off"></div>
+    </div>
+    <label for="adresse">Adresse der Baustelle</label><input id="adresse" autocomplete="off">
+    <label for="kunde">Auftraggeber / Kunde</label><input id="kunde" autocomplete="off">
+    <label for="bauleiter">Bauleiter / Ansprechpartner</label><input id="bauleiter" autocomplete="off">
+    <label for="mitarbeiter">Mitarbeiter</label><input id="mitarbeiter" placeholder="Name(n), mehrere mit Komma" autocomplete="off">
+    <div class="row">
+      <div><label for="von">Beginn</label><input type="time" id="von"></div>
+      <div><label for="bis">Ende</label><input type="time" id="bis"></div>
+      <div><label for="pause">Pause (Min.)</label><input type="number" inputmode="numeric" id="pause" placeholder="30" min="0"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>🎤 Rapport per Sprache</h2>
+    <div class="hint">Mikrofon starten und frei erzählen: Was wurde gemacht, welche Materialien (mit Menge und Einheit) und Geräte wurden benutzt? Danach „Auswerten“.</div>
+    <textarea id="diktat" placeholder="Beispiel: Heute Bad im Obergeschoss gefliest. Verlegt wurden 14 Quadratmeter Bodenfliesen 60 mal 60, verbraucht 3 Sack Fliesenkleber, 6 laufende Meter Schlüterschiene, 2 Kilo Fugenmasse. Benutzt wurden Nassschneider 4 Stunden und Rührgerät 2 Stunden."></textarea>
+    <div class="bar">
+      <button class="btn" id="mic" type="button">🎤 Sprechen</button>
+      <button class="btn grn" id="ki" type="button">✨ Auswerten</button>
+      <button class="btn sec" id="diktClear" type="button">Leeren</button>
+    </div>
+    <div class="hint" id="micHint"></div>
+  </section>
+
+  <section class="card">
+    <h2>Ausgeführte Arbeiten</h2>
+    <textarea id="taetigkeit" placeholder="Tätigkeitsbericht"></textarea>
+    <div class="bar"><button class="btn sec" id="mic2" type="button">🎤 Diktieren</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Verbrauchte Werkstoffe / Material</h2>
+    <div class="colh"><span>Bezeichnung</span><span>Menge</span><span>Einheit</span><span></span></div>
+    <div id="mat"></div>
+    <div class="bar"><button class="btn sec" id="addMat" type="button">+ Material</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Eingesetzte Geräte / Maschinen</h2>
+    <div class="colh"><span>Bezeichnung</span><span>Menge</span><span>Einheit</span><span></span></div>
+    <div id="ger"></div>
+    <div class="bar"><button class="btn sec" id="addGer" type="button">+ Gerät</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Fotos</h2>
+    <div class="bar">
+      <button class="btn sec" id="camBtn" type="button">📷 Foto aufnehmen</button>
+      <button class="btn sec" id="galBtn" type="button">🖼 Aus Galerie</button>
+    </div>
+    <input type="file" id="cam" accept="image/*" capture="environment" class="hide">
+    <input type="file" id="gal" accept="image/*" multiple class="hide">
+    <div class="photos" id="photos"></div>
+  </section>
+
+  <section class="card">
+    <h2>Bemerkungen / Besonderheiten</h2>
+    <textarea id="bemerkung" style="min-height:70px" placeholder="Behinderungen, Mängel, Zusatzleistungen, Absprachen …"></textarea>
+  </section>
+
+  <section class="card">
+    <h2>Unterschriften</h2>
+    <label>Mitarbeiter / Bauleiter</label>
+    <canvas class="sig" id="sig1"></canvas>
+    <div class="bar"><button class="btn sec" data-clr="sig1" type="button">Löschen</button></div>
+    <label for="kundeName">Kunde / Auftraggeber – Name</label>
+    <input id="kundeName" placeholder="Name in Druckbuchstaben" autocomplete="off">
+    <canvas class="sig" id="sig2" style="margin-top:6px"></canvas>
+    <div class="bar"><button class="btn sec" data-clr="sig2" type="button">Löschen</button></div>
+  </section>
+</div>
+
+<!-- ============ ARCHIV ============ -->
+<div id="v-archiv" class="hide">
+  <section class="card list"><h2>Gespeicherte Rapporte</h2><div id="liste"></div></section>
+</div>
+
+<!-- ============ EINSTELLUNGEN ============ -->
+<div id="v-set" class="hide">
+  <section class="card">
+    <h2>Firma &amp; PDF</h2>
+    <label for="s_firma">Firmenname</label><input id="s_firma">
+    <label for="s_kontakt">Kontaktzeile (unter dem Logo im PDF)</label><input id="s_kontakt">
+    <label>Logo</label>
+    <img id="logoPrev" alt="Logo-Vorschau">
+    <div class="bar">
+      <button class="btn sec" id="logoWeb" type="button">Von Webseite laden</button>
+      <button class="btn sec" id="logoBtn" type="button">Logo auswählen</button>
+      <button class="btn sec" id="logoDel" type="button">Logo entfernen</button>
+    </div>
+    <input type="file" id="logoFile" accept="image/*" class="hide">
+    <label for="s_logourl">Logo-Adresse (Webseite)</label><input id="s_logourl" type="url" inputmode="url" autocomplete="off">
+    <div class="hint">Am besten PNG mit transparentem oder weißem Hintergrund. Das Logo erscheint in der App und im PDF.</div>
+    <label for="s_farbe">Akzentfarbe</label><input type="color" id="s_farbe" value="#1f4e79" style="height:44px;padding:3px">
+  </section>
+  <section class="card">
+    <h2>Standardwerte</h2>
+    <label for="s_ma">Standard-Mitarbeiter</label><input id="s_ma">
+    <label for="s_mail">Standard-Empfänger (E-Mail, für Mail-Entwurf)</label><input id="s_mail" type="email" inputmode="email" placeholder="buero@…">
+  </section>
+  <section class="card">
+    <h2>KI-Auswertung</h2>
+    <label for="s_key">Claude-API-Key (optional)</label>
+    <input id="s_key" type="password" autocomplete="off" placeholder="sk-ant-…">
+    <div class="hint">Der Schlüssel wird nur auf diesem Gerät gespeichert. Ohne Schlüssel (oder ohne Netz) wertet die App das Diktat mit einfacher Mustererkennung aus: Menge + Einheit + Bezeichnung.</div>
+  </section>
+  <div class="bar" style="margin:0 0 12px"><button class="btn" id="saveSet" type="button" style="width:100%">Einstellungen speichern</button></div>
+  <section class="card">
+    <h2>Installation</h2>
+    <div class="hint"><b>iPhone:</b> in Safari öffnen → Teilen-Symbol → „Zum Home-Bildschirm“.<br><b>Android:</b> in Chrome öffnen → Menü ⋮ → „App installieren“.<br>Danach startet die App wie eine normale App, auch ohne Netz.</div>
+    <div class="hint" id="ver"></div>
+  </section>
+</div>
+</main>
+
+<div class="bottom" id="bottom">
+  <button class="btn sec" id="save" type="button">💾 Speichern</button>
+  <button class="btn" id="send" type="button">📄 PDF &amp; Mail</button>
+  <button class="btn red" id="newBtn" type="button" style="flex:0 0 52px" title="Neuer Rapport" aria-label="Neuer Rapport">＋</button>
+</div>
+
+<div id="modal"><div class="box">
+  <h3>PDF ist fertig</h3>
+  <div class="hint" id="mInfo"></div>
+  <button class="btn" id="mShare" type="button">📤 Teilen / per Mail senden</button>
+  <button class="btn sec" id="mMail" type="button">✉️ Mail-Entwurf öffnen</button>
+  <button class="btn sec" id="mView" type="button">👁 PDF ansehen</button>
+  <button class="btn sec" id="mSave" type="button">⬇️ PDF speichern</button>
+  <button class="btn sec" id="mClose" type="button">Schließen</button>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script src="jspdf.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
