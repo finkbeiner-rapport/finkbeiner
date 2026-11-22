@@ -273,10 +273,12 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
   <h3 id="mTitle">Rapport fertig – was möchtest du tun?</h3>
   <div class="hint">Der Rapport ist als PDF erstellt und im Archiv gesichert. Wähle, wie es weitergeht. Bei „Per Mail senden“ im Menü Mail oder Gmail wählen, das PDF hängt automatisch an.</div>
   <div class="hint" id="mInfo"></div>
+  <div class="hint"><b>Betreff:</b> <span id="mSubj"></span><br><b>An:</b> <span id="mTo"></span></div>
+  <div class="bar" style="margin:0"><button class="btn sec" id="mCopyS" type="button" style="flex:1">📋 Betreff kopieren</button><button class="btn sec" id="mCopyB" type="button" style="flex:1">📋 Text kopieren</button></div>
   <button class="btn" id="mShare" type="button">📤 Per Mail senden (PDF im Anhang)</button>
   <button class="btn grn" id="mDone" type="button">✔ Nur speichern (Archiv)</button>
   <button class="btn sec" id="mNew" type="button">＋ Speichern &amp; neuen Rapport beginnen</button>
-  <button class="btn sec" id="mMail" type="button">✉️ Nur Mail-Text (ohne Anhang)</button>
+  <button class="btn sec" id="mMail" type="button">✉️ Mail mit Betreff &amp; Text öffnen (PDF dann anhängen)</button>
   <button class="btn sec" id="mView" type="button">👁 PDF ansehen</button>
   <button class="btn sec" id="mSave" type="button">⬇️ PDF speichern</button>
   <button class="btn sec" id="mClose" type="button">Schließen</button>
