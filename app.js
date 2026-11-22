@@ -1,7 +1,7 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '3.1';
+const VERSION = '3.2';
 const $ = id => document.getElementById(id);
 const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
@@ -418,7 +418,8 @@ const FILLER_RE = /^(?:ca\.?|circa|etwa|ungefähr|insgesamt|noch|weitere?n?|zus�
 const cap = n => n.charAt(0).toUpperCase() + n.slice(1);
 const sq = s => String(s || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]/g, '');
 const escRe = c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const termBody = t => [...sq(t)].map(escRe).join('[\\s\\-]?');
+const UML = { 'ä': '(?:ä|ae|a)', 'ö': '(?:ö|oe|o)', 'ü': '(?:ü|ue|u)' };
+const termBody = t => [...sq(t)].map(c => UML[c] || escRe(c)).join('[\\s\\-]?');
 const splitNames = s => String(s || '').split(/,|;|&|\sund\s/i).map(x => x.trim()).filter(Boolean);
 function lev(a, b){
   const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
@@ -543,7 +544,7 @@ $('anfahrtInfo').addEventListener('input', () => { $('anfahrtInfo').dataset.auto
 /* ---------- Auswertung (lokal): Katalog + Mustererkennung ---------- */
 function parseLocal(text0){
   const text = applyVocab(text0);
-  let t = text.replace(/\s+/g, ' ').replace(NUMWORD_RE, m => NUM_WORDS[m.toLowerCase()]).replace(/(\d)\s*(?:[x×]|mal)\s*(\d)/gi, '$1x$2');
+  let t = text.replace(/\s*\n+\s*/g, ', ').replace(/\s+/g, ' ').replace(NUMWORD_RE, m => NUM_WORDS[m.toLowerCase()]).replace(/(\d)\s*(?:[x×]|mal)\s*(\d)/gi, '$1x$2');
   const out = { mat: [], ger: [] }; const seen = new Set(); const gebinde = {};
   const push = (kind, name, menge, unit, raw) => {
     if (kind === 'ger' && !GER_UNITS.includes(unit)) unit = 'Stk';
@@ -575,7 +576,7 @@ function parseLocal(text0){
     let rawName = nm.replace(VERB_RE, '').replace(STOP_RE, '').trim();
     rawName = rawName.split(' ').slice(0, 5).join(' ');
     const leftover = full.slice(full.indexOf(rawName) + rawName.length);
-    if (rawName.length < 2) return ' ';
+    if (rawName.length < 2 || /^(heute|gestern|dann|danach|auch|noch|und|wir|es)$/i.test(rawName)) return ' ' + leftover + ' ';
     let name, kind; const r = canonAny(rawName);
     if (r){ const sp = specOf(r.rest); const col = (r.rest.match(/\b(grau|graue|graues|weiß|weiße|schwarz|schwarze|beige|anthrazit|braun|braune|creme|grün|blau|rot)\b/i) || [])[0]; name = r.e.n + (col ? ' ' + col.toLowerCase().replace(/e$/, '') : '') + (sp ? ' ' + sp : ''); kind = r.e.kind; }
     else { name = cap(rawName); kind = (['Std', 'Tage', 'Min'].includes(unit) || GERAET_RE.test(rawName)) ? 'ger' : 'mat'; }
@@ -669,30 +670,69 @@ function applyRes(res, how){
   toast(`Ausgewertet (${how}): ${res.material.length} Material, ${res.geraete.length} Geräte – bitte prüfen. Korrekturen merkt sich die App.`, 5000);
 }
 
-/* ---------- Rapport scannen (Foto eines handschriftlichen Rapports) ---------- */
-$('scan').onclick = () => {
-  if (!(S.get().key || '').trim()) return toast('Zum Scannen von Handschrift wird der Claude-API-Key aus den Einstellungen benötigt (KI-Auswertung).', 6000);
-  if (!navigator.onLine) return toast('Zum Scannen ist eine Internetverbindung nötig.', 4000);
-  $('scanFile').click();
-};
+/* ---------- Rapport einlesen: Foto oder PDF, mit KI (Key) oder offline (eingebaute Texterkennung) ---------- */
+const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Datei fehlt: ' + src)); document.head.appendChild(s); });
+async function pdfPages(file, max = 4){
+  if (!window.pdfjsLib){ await loadScript('ocr/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc = 'ocr/pdf.worker.min.js'; }
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise; const out = [];
+  for (let n = 1; n <= Math.min(pdf.numPages, max); n++){
+    const pg = await pdf.getPage(n); const v0 = pg.getViewport({ scale: 1 }); const sc = Math.min(3, 2200 / Math.max(v0.width, v0.height));
+    const vp = pg.getViewport({ scale: sc }); const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: x, viewport: vp }).promise; out.push({ data: c.toDataURL('image/jpeg', 0.85), w: c.width, h: c.height });
+  }
+  return { pages: out, total: pdf.numPages };
+}
+let ocrWorker = null;
+async function ocrText(dataUrl, onProg){
+  if (!window.Tesseract) await loadScript('ocr/tesseract.min.js');
+  if (!ocrWorker) ocrWorker = await Tesseract.createWorker('deu', 1, { workerPath: 'ocr/worker.min.js', corePath: 'ocr/core', langPath: 'ocr/lang', gzip: true, workerBlobURL: false, logger: m => { if (m.status === 'recognizing text' && onProg) onProg(Math.round(m.progress * 100)); } });
+  const r = await ocrWorker.recognize(dataUrl);
+  return (r.data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function kopfAusText(t){
+  const k = {}; const d = t.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\b/);
+  if (d){ const y = d[3].length === 2 ? '20' + d[3] : d[3]; k.datum = `${y}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}`; }
+  const z = t.match(/(\d{1,2})[:.](\d{2})\s*(?:-|–|bis)\s*(\d{1,2})[:.](\d{2})/);
+  if (z){ k.von = z[1] + ':' + z[2]; k.bis = z[3] + ':' + z[4]; }
+  return k;
+}
+$('scan').onclick = () => $('scanFile').click();
 $('scanFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  const b = $('scan'); b.disabled = true; const old = b.textContent; b.textContent = '… liest Rapport';
+  const b = $('scan'); const old = b.textContent; b.disabled = true;
+  const key = (S.get().key || '').trim(); const useAI = !!key && navigator.onLine; let texts = [], first = true, imgs = [];
+  const setIf = (id, v) => { v = String(v || '').trim(); if (v && !$(id).value) $(id).value = v; };
+  const hm = v => { const m = String(v || '').match(/^(\d{1,2})[:.](\d{2})$/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };
   try {
-    const p = await compress(f, 2000, 0.85);
-    const res = await parseAI('', (S.get().key || '').trim(), p.data);
-    const k = res.kopf || {};
-    const setIf = (id, v) => { v = String(v || '').trim(); if (v && !$(id).value) $(id).value = v; };
-    if (/^\d{4}-\d{2}-\d{2}$/.test(k.datum || '')) setIf('datum', k.datum);
-    setIf('objekt', k.objekt); setIf('kunde', k.kunde); setIf('mitarbeiter', k.mitarbeiter);
-    const hm = v => { const m = String(v || '').match(/^(\d{1,2})[:.](\d{2})$/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };
-    setIf('von', hm(k.von || k.beginn)); setIf('bis', hm(k.bis)); if (k.pause && num(k.pause) != null) setIf('pause', String(num(k.pause)));
-    if (res.abschrift) $('diktat').value = ($('diktat').value.trim() ? $('diktat').value.trim() + '\n\n' : '') + res.abschrift;
-    applyRes(res, 'Scan');
-    if (confirm('Den Scan auch als Foto an den Rapport anhängen (Dokumentation im PDF)?')){ cur.fotos.push({ data: p.data, w: p.w, h: p.h, text: 'Handschriftlicher Rapport (Scan)' }); renderPhotos(); }
+    b.textContent = '… lädt';
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    let pages;
+    if (isPdf){ const r = await pdfPages(f); pages = r.pages; if (r.total > pages.length) toast(`Nur die ersten ${pages.length} von ${r.total} Seiten werden gelesen.`, 4000); }
+    else pages = [await compress(f, 2200, 0.88)];
+    for (let i = 0; i < pages.length; i++){
+      const p = pages[i]; imgs.push(p); let res;
+      b.textContent = `… liest Seite ${i + 1}/${pages.length}`;
+      if (useAI) res = await parseAI('', key, p.data);
+      else {
+        const txt = await ocrText(p.data, pr => { b.textContent = `… liest Seite ${i + 1}/${pages.length} (${pr} %)`; });
+        res = parseLocal(txt); res.abschrift = txt; res.kopf = kopfAusText(txt);
+      }
+      const k = res.kopf || {};
+      if (first){
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k.datum || '')) $('datum').value = k.datum;
+        setIf('objekt', k.objekt); setIf('kunde', k.kunde); setIf('mitarbeiter', k.mitarbeiter);
+        setIf('von', hm(k.von || k.beginn)); setIf('bis', hm(k.bis)); if (k.pause && num(k.pause) != null) setIf('pause', String(num(k.pause)));
+        first = false;
+      }
+      if (res.abschrift) $('diktat').value = ($('diktat').value.trim() ? $('diktat').value.trim() + '\n\n' : '') + res.abschrift;
+      applyRes(res, useAI ? 'Scan mit KI' : 'Scan offline');
+    }
+    if (!useAI) toast('Offline gelesen: Druck- und saubere Blockschrift klappen gut, Schreibschrift nur bedingt. Bitte alles prüfen.', 7000);
+    if (confirm('Das Original (Foto/PDF-Seite) auch als Foto an den Rapport anhängen?')){ imgs.forEach(p => cur.fotos.push({ data: p.data, w: p.w, h: p.h, text: 'Eingelesener Rapport' })); renderPhotos(); }
     liveScan(); updateStd(); markDirty();
   } catch(err){
-    toast(err && err.auth ? 'API-Schlüssel ungültig.' : 'Scan fehlgeschlagen: ' + (err && err.message || err) + ' – bitte ein gut beleuchtetes, gerades Foto versuchen.', 6000);
+    toast(err && err.auth ? 'API-Schlüssel ungültig.' : 'Einlesen fehlgeschlagen: ' + (err && err.message || err), 6000);
   } finally { b.disabled = false; b.textContent = old; }
 };
 
