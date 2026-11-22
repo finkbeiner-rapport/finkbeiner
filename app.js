@@ -1,9 +1,9 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '3.3';
+const VERSION = '3.4';
 const $ = id => document.getElementById(id);
-const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
+const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','psch','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
 const MODEL = 'claude-sonnet-5-5';
 const DEF = {
@@ -129,7 +129,8 @@ function workTime(r){
   const list = (names.length ? names : ['']).map(n => {
     const o = (ov[n] && typeof ov[n] === 'object') ? ov[n] : {};
     const von = o.von || r.von || '', bis = o.bis || r.bis || '', pause = (o.pause !== undefined && o.pause !== '') ? o.pause : (r.pause || '');
-    return { name: n, von, bis, pause, mins: calc(von, bis, pause), own: !!(o.von || o.bis || (o.pause !== undefined && o.pause !== '')) };
+    const sd = num(o.std); const direct = sd != null && sd >= 0 && String(o.std).trim() !== '';
+    return { name: n, von, bis, pause, direct, mins: direct ? Math.round(sd * 60) : calc(von, bis, pause), own: !!(direct || o.von || o.bis || (o.pause !== undefined && o.pause !== '')) };
   });
   const man = list.reduce((s, x) => s + x.mins, 0); if (!man) return null;
   return { mins: calc(r.von, r.bis, r.pause) || list[0].mins, n: list.length, list, man };
@@ -149,7 +150,8 @@ function updateStd(){
       h += `<div class="mst" data-n="${esc(n)}"><b>${esc(n)}</b>
         <div class="mrow"><button class="btn sec" type="button" data-k="von">▶ Kommen</button><input type="time" data-f="von" value="${esc(o.von || '')}">
         <button class="btn sec" type="button" data-k="bis">■ Gehen</button><input type="time" data-f="bis" value="${esc(o.bis || '')}">
-        <input type="number" inputmode="numeric" data-f="pause" min="0" placeholder="Pause" value="${esc(o.pause === undefined ? '' : o.pause)}"></div>
+        <input type="number" inputmode="numeric" data-f="pause" min="0" placeholder="Pause (Min.)" value="${esc(o.pause === undefined ? '' : o.pause)}">
+        <label class="stl">oder Stunden direkt:</label><input inputmode="decimal" data-f="std" placeholder="z. B. 4 oder 7,5" value="${esc(o.std === undefined ? '' : o.std)}"></div>
         <div class="mh"></div></div>`;
     });
   }
@@ -167,7 +169,7 @@ function stdRefresh(){
   const w = curWT();
   el.querySelectorAll('.mst').forEach(row => {
     const x = w && w.list.find(y => y.name === row.dataset.n); const m = row.querySelector('.mh');
-    m.textContent = x && x.mins ? `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''} = ${fmtHM(x.mins)} (${fmtDec(x.mins)})` : 'Zeit noch nicht erfasst';
+    m.textContent = x && x.mins ? (x.direct ? `direkt erfasst = ${fmtHM(x.mins)} (${fmtDec(x.mins)})` : `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''} = ${fmtHM(x.mins)} (${fmtDec(x.mins)})`) : 'Zeit noch nicht erfasst';
   });
   t.innerHTML = w ? `<b>Gesamtstunden${w.n > 1 ? ' (alle Mitarbeiter)' : ''}: ${fmtHM(w.man)} (${fmtDec(w.man)})</b>` : 'Gesamtstunden: Beginn und Ende eintragen oder stempeln.';
 }
@@ -402,13 +404,13 @@ const D = (() => {
 const UNIT_MAP = [
   [/^(m²|m2|qm|quadratmeter)$/i, 'm²'], [/^(lfm|lfdm|laufende[nr]? meter|lfd\.? ?m)$/i, 'lfm'],
   [/^(m³|m3|kubikmeter|cbm)$/i, 'm³'], [/^(meter|m)$/i, 'm'], [/^(kg|kilo|kilogramm)$/i, 'kg'],
-  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?)$/i, 'Stk'], [/^(tube|tuben|kartuschen?)$/i, 'Kartusche'],
+  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?)$/i, 'Stk'], [/^(tube|tuben|kartuschen?)$/i, 'Kartusche'], [/^(beutel)$/i, 'Stk'], [/^(psch|pausch|pauschal|pauschale)$/i, 'psch'],
   [/^(sack|säcke|saecke)$/i, 'Sack'], [/^(eimer)$/i, 'Eimer'], [/^(pkt|paket|pakete|packung|packungen)$/i, 'Pkt'],
   [/^(gebinde|kanister)$/i, 'Gebinde'], [/^(t|tonnen?)$/i, 't'],
   [/^(std|stunden?|h)$/i, 'Std'], [/^(tage?|tag)$/i, 'Tage'], [/^(min|minuten)$/i, 'Min']
 ];
 function normUnit(u){ if (!u) return null; u = String(u).trim(); for (const [re, n] of UNIT_MAP) if (re.test(u)) return n; return null; }
-const UNITRE = 'm²|m2|m³|m3|qm|quadratmeter|kubikmeter|lfm|lfdm|laufende[nr]? meter|kilogramm|kilo|kg|gramm|liter|stück|stk|säcke|sack|eimer|pakete|paket|packungen|packung|tuben|tube|kartuschen|kartusche|rollen|rolle|gebinde|kanister|tonnen|stunden|stunde|std|minuten|min|tage|tag|meter|m|g|l|t|h';
+const UNITRE = 'm²|m2|m³|m3|qm|quadratmeter|kubikmeter|lfm|lfdm|laufende[nr]? meter|kilogramm|kilo|kg|gramm|liter|stück|stk|säcke|sack|eimer|pakete|paket|packungen|packung|beutel|tuben|tube|kartuschen|kartusche|rollen|rolle|gebinde|kanister|tonnen|stunden|stunde|std|minuten|min|tage|tag|meter|m|g|l|t|h';
 const GERAET_RE = /(schneider|rührgerät|ruehrgeraet|rührer|bohrmaschine|bohrhammer|gerüst|gerueste|mischer|rüttler|rüttelplatte|schleifer|flex|laser|kompressor|sauger|staubsauger|leiter|hubwagen|kran|aufzug|maschine|gerät|wasserwaage|pumpe|heizer|trockner)/i;
 const NUM_WORDS = { ein: 1, eine: 1, einen: 1, zwei: 2, drei: 3, vier: 4, fünf: 5, sechs: 6, sieben: 7, acht: 8, neun: 9, zehn: 10, elf: 11, zwölf: 12 };
 const NUMWORD_RE = new RegExp('\\b(ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)\\b(?=\\s+(?:' + UNITRE + ')(?=[\\s,.;:)]|$))', 'gi');
@@ -494,6 +496,44 @@ function applyVocab(text){
   return t;
 }
 
+/* Brüche und Zahlenschreibweisen: 1½ -> 1.5, 1 1/2 -> 1.5, halbe Stunde -> 0.5 */
+function fracNorm(t){
+  const F = { '½': .5, '¼': .25, '¾': .75 };
+  return String(t)
+    .replace(/(\d+)\s*([½¼¾])/g, (m, n, f) => String(+n + F[f]))
+    .replace(/(^|[^\d])([½¼¾])/g, (m, p, f) => p + String(F[f]))
+    .replace(/(\d+)\s+(1\/2|1\/4|3\/4)\b/g, (m, n, f) => String(+n + eval(f)))
+    .replace(/(^|[^\d])(1\/2|1\/4|3\/4)\b/g, (m, p, f) => p + String(eval(f)))
+    .replace(/\b(?:eine\s+)?halbe[nr]?\s+(stunde|std)/gi, '0.5 $1')
+    .replace(/\b(eineinhalb|anderthalb)\s+(stunden?|std)/gi, '1.5 $2')
+    .replace(/(\d),(\d)/g, '$1.$2');
+}
+function sameP(a, b){
+  const ta = String(a).trim().split(/\s+/), tb = String(b).trim().split(/\s+/);
+  if (sq(a) === sq(b)) return true;
+  const la = sq(ta[ta.length - 1]), lb = sq(tb[tb.length - 1]);
+  return la.length >= 3 && la === lb && (ta.length === 1 || tb.length === 1 || sq(ta[0])[0] === sq(tb[0])[0]);
+}
+const DEV_END = /(maschine|schneider|sauger|gerät|geraet|bohrer|hammer|gerüst|platte|schleifer|stripper|laser|säge|mischer|reiniger|reinigung)$/i;
+function isPerson(n){
+  n = n.trim(); if (D.get().ma.some(m => sameP(m, n))) return true;
+  if (canonAny(n) || GERAET_RE.test(n) || DEV_END.test(n)) return false;
+  if (/^[A-ZÄÖÜ]\.\s?[A-ZÄÖÜ][a-zäöüß]{2,}$/.test(n)) return true;
+  return /^[A-ZÄÖÜ][a-zäöüß]+\s[A-ZÄÖÜ][a-zäöüß]+$/.test(n);
+}
+function extractPersons(t){
+  const list = []; const hrs = '\\s*(?:[Ss]td\\.?|[Ss]tunden?|h)\\b';
+  const take = (name, v) => { const x = parseFloat(v); if (!isNaN(x)) list.push({ name: name.trim(), std: x }); return ' , '; };
+  // bekannte Mitarbeiter: überall im Text
+  D.get().ma.forEach(m => {
+    const parts = [m].concat(m.split(/\s+/).length > 1 ? [m.split(/\s+/).slice(-1)[0]] : []);
+    parts.forEach(p => { if (p.length < 3) return; t = t.replace(new RegExp('(^|[^A-Za-zÄÖÜäöüß])(' + escRe(p) + ')\\s+(\\d+(?:\\.\\d+)?)' + hrs, 'gi'), (mm, pre, nm, v) => pre + take(m, v)); });
+  });
+  // unbekannte Namen: am Zeilen-/Satzanfang
+  t = t.replace(new RegExp('(^|[,;]\\s*)((?:[A-ZÄÖÜ]\\.\\s?)?[A-ZÄÖÜ][a-zäöüß]+(?:\\s[A-ZÄÖÜ][a-zäöüß]+)?)\\s+(\\d+(?:\\.\\d+)?)' + hrs, 'g'), (mm, pre, nm, v) => isPerson(nm) ? pre + take(nm, v) : mm);
+  return { t, list };
+}
+
 /* Tätigkeit -> Gerät (Wortstämme) */
 const VERB_GER = [
   [/(abgesaugt|absaug|aufgesaugt|gesaugt|staubgesaugt|saugen)/i, 'Bausauger'],
@@ -502,6 +542,8 @@ const VERB_GER = [
   [/(angerührt|angemischt|angeruehrt|gerührt|aufgerührt|angemixt)/i, 'Rührgerät'],
   [/(gestemmt|gemeißelt|gemeisselt|aufgestemmt|abgestemmt|aufgeschlagen|abgeschlagen)/i, 'Bohrhammer'],
   [/(geflext|abgeflext|angeflext)/i, 'Winkelschleifer'],
+  [/(abgeschliffen|abgeschlifen|angeschliffen|abgeschleift|tellerschleif)/i, 'Tellerschleifmaschine'],
+  [/(teppichstripper|stripper|rausgemacht|herausgerissen)/i, 'Teppichstripper'],
   [/(nivelliert|ausgelasert|eingelasert|mit laser)/i, 'Rotationslaser'],
   [/(getrocknet|trocknung|aufgeheizt)/i, 'Bautrockner']
 ];
@@ -543,14 +585,17 @@ $('anfahrtInfo').addEventListener('input', () => { $('anfahrtInfo').dataset.auto
 
 /* ---------- Auswertung (lokal): Katalog + Mustererkennung ---------- */
 function parseLocal(text0){
-  const text = applyVocab(text0);
+  const text = applyVocab(fracNorm(text0));
   let t = text.replace(/\s*\n+\s*/g, ', ').replace(/\s+/g, ' ').replace(NUMWORD_RE, m => NUM_WORDS[m.toLowerCase()]).replace(/(\d)\s*(?:[x×]|mal)\s*(\d)/gi, '$1x$2');
   const out = { mat: [], ger: [] }; const seen = new Set(); const gebinde = {};
+  const pe = extractPersons(t); t = pe.t;
+
   const push = (kind, name, menge, unit, raw) => {
     if (kind === 'ger' && !GER_UNITS.includes(unit)) unit = 'Stk';
     const key = [kind, name.toLowerCase(), unit, menge].join('|'); if (seen.has(key)) return; seen.add(key);
     out[kind].push({ name, menge, einheit: unit, raw: raw || name });
   };
+  t = t.replace(/\+\s*(\d+)\s*beutel\b/gi, (m, q) => { push('mat', 'Staubsaugerbeutel', num(q), 'Stk', 'Beutel'); return ' '; });
   // Gebinde: "3 Sack Fliesenkleber à 25 kg"  /  "3 Sack Fliesenkleber 25 kg"
   t = t.replace(/(\d+(?:[.,]\d+)?\s*(?:sack|säcke|eimer|pakete?|packungen?|kartuschen?|gebinde|kanister|rollen?)\s+)([^,.;:\d]*?)\s*(?:à|a|je|zu)?\s*(\d+(?:[.,]\d+)?)\s*(kg|l|g)\b/gi,
     (m, pre, nm, q, u) => { nm = nm.trim(); if (nm.length < 2) return m; gebinde[sq(nm)] = 'à ' + q + ' ' + u; return pre + nm; });
@@ -564,6 +609,11 @@ function parseLocal(text0){
     t = t.replace(re, (m, pre, q, u, off, whole) => { const un = normUnit(u); if (!un) return m;
       if (new RegExp('\\d\\s*(?:' + UNITRE + ')\\s*(?:von\\s+)?$', 'i').test(whole.slice(0, off + pre.length))) return m;
       push(e.kind, e.n, num(q), un, x.t); return pre + ' '; });
+  });
+
+  // A2) unbekannter Name vor Stunden: "Maschinenreinigung 0.5 Stunde"
+  t = t.replace(/(^|[,;]\s*)([A-ZÄÖÜ][A-Za-zäöüß-]{5,}(?:\s[a-zäöüß]+)?)\s+(\d+(?:\.\d+)?)\s*(?:[Ss]td\.?|[Ss]tunden?|h)\b/g, (m, pre, nm, q) => {
+    const r = canonName('ger', nm); push('ger', r ? r.e.n : nm.trim(), num(q), 'Std', nm); return pre + ' ';
   });
 
   // B) Menge vor Name: "14 Quadratmeter Bodenfliesen 60x60", "4 Stunden Nassschneider"
@@ -595,8 +645,9 @@ function parseLocal(text0){
   VERB_GER.forEach(([re, name]) => {
     if (re.test(text) && !out.ger.some(x => sq(x.name) === sq(name))){ const e = CAT.get('ger').find(x => x.n === name); if (e) push('ger', e.n, null, e.u === 'Tage' ? 'Tage' : 'Std', e.n); }
   });
+  if (/(entsorgt|entsorgung|abtransportiert|bauschutt|container)/i.test(text) && !out.mat.some(x => sq(x.name) === 'entsorgung')) push('mat', 'Entsorgung', null, 'psch', 'entsorgt');
   const an = parseAnfahrt(text);
-  return { taetigkeit: text.trim(), material: out.mat, geraete: out.ger, bemerkung: '', anfahrt: an.anfahrt, anfahrtInfo: an.info };
+  return { maStunden: pe.list, taetigkeit: applyVocab(text0).trim(), material: out.mat, geraete: out.ger, bemerkung: '', anfahrt: an.anfahrt, anfahrtInfo: an.info };
 }
 
 /* ---------- Auswertung (Claude) ---------- */
@@ -605,8 +656,8 @@ async function parseAI(text, key, img){
   const list = k => CAT.get(k).map(e => `${e.n} (${e.u})`).join(', ');
   const learned = ['mat', 'ger'].flatMap(k => Object.entries(d.alias[k]).map(([raw, t]) => `${raw} → ${t.n}`)).concat(Object.entries(d.vocab).map(([a, b]) => `${a} → ${b}`));
   const sys = `Du bist Assistent für einen Fliesenlegerbetrieb und wertest diktierte Tagesrapporte aus (die Spracherkennung macht oft Fehler, z. B. getrennt geschriebene Wörter). Antworte NUR mit gültigem JSON ohne Erklärung, Format:
-{"taetigkeit":"sachlich formulierte, sprachlich korrigierte Zusammenfassung der ausgeführten Arbeiten in kurzen Sätzen oder Stichpunkten (Raum/Bereich, Arbeitsschritte)","material":[{"name":"","menge":0,"einheit":""}],"geraete":[{"name":"","menge":0,"einheit":""}],"bemerkung":"","anfahrt":"Ja|Nein|","anfahrtInfo":""}
-Regeln: "anfahrt": "Ja", wenn eine Anfahrt/Fahrt zur Baustelle erwähnt wird, "Nein" wenn ausdrücklich keine, sonst leer; "anfahrtInfo" = Kilometer/Fahrzeit, falls genannt. Geräte werden auch aus Tätigkeiten abgeleitet (z. B. „Boden abgesaugt“ → Bausauger/Staubsauger, „Fliesen zugeschnitten“ → Fliesenschneider/Nassschneider, „Löcher gebohrt“ → Bohrmaschine) und mit menge null aufgenommen. Verbrauchte Werkstoffe/Material (Fliesen, Kleber, Fugenmasse, Profile, Grundierung, Abdichtung …) kommen in "material", Maschinen/Werkzeuge/Gerüste in "geraete". Einheiten bei material nur aus: ${MAT_UNITS.join(', ')}. Einheiten bei geraete nur aus: ${GER_UNITS.join(', ')}. Mengen als Zahl (Punkt als Dezimaltrenner). Quadratmeter = m², laufende Meter = lfm, Kilogramm = kg, Säcke = Sack. Format/Größe/Typ gehört in den Namen (z. B. "Bodenfliesen 60x60"). Erfinde NIE Mengen: ist keine genannt, setze menge null. Geräte ohne Zeitangabe trotzdem aufnehmen (menge null). "bemerkung" nur für Mängel, Behinderungen, Absprachen, Zusatzleistungen, sonst leer.
+{"taetigkeit":"sachlich formulierte, sprachlich korrigierte Zusammenfassung der ausgeführten Arbeiten in kurzen Sätzen oder Stichpunkten (Raum/Bereich, Arbeitsschritte)","material":[{"name":"","menge":0,"einheit":""}],"geraete":[{"name":"","menge":0,"einheit":""}],"bemerkung":"","anfahrt":"Ja|Nein|","anfahrtInfo":"","mitarbeiter_stunden":[{"name":"","stunden":0}]}
+Regeln: "mitarbeiter_stunden": Stunden, die einzelnen Personen zugeordnet sind (z. B. „R. Patti 4 Stunden“) – das sind KEINE Geräte. Wird Material oder ein Belag entsorgt/abtransportiert, nimm "Entsorgung" (einheit psch) in material auf. Bruchzahlen wie 1½ = 1.5 und „halbe Stunde“ = 0.5 beachten. Einheiten bei material zusätzlich erlaubt: psch. "anfahrt": "Ja", wenn eine Anfahrt/Fahrt zur Baustelle erwähnt wird, "Nein" wenn ausdrücklich keine, sonst leer; "anfahrtInfo" = Kilometer/Fahrzeit, falls genannt. Geräte werden auch aus Tätigkeiten abgeleitet (z. B. „Boden abgesaugt“ → Bausauger/Staubsauger, „Fliesen zugeschnitten“ → Fliesenschneider/Nassschneider, „Löcher gebohrt“ → Bohrmaschine) und mit menge null aufgenommen. Verbrauchte Werkstoffe/Material (Fliesen, Kleber, Fugenmasse, Profile, Grundierung, Abdichtung …) kommen in "material", Maschinen/Werkzeuge/Gerüste in "geraete". Einheiten bei material nur aus: ${MAT_UNITS.join(', ')}. Einheiten bei geraete nur aus: ${GER_UNITS.join(', ')}. Mengen als Zahl (Punkt als Dezimaltrenner). Quadratmeter = m², laufende Meter = lfm, Kilogramm = kg, Säcke = Sack. Format/Größe/Typ gehört in den Namen (z. B. "Bodenfliesen 60x60"). Erfinde NIE Mengen: ist keine genannt, setze menge null. Geräte ohne Zeitangabe trotzdem aufnehmen (menge null). "bemerkung" nur für Mängel, Behinderungen, Absprachen, Zusatzleistungen, sonst leer.
 Bekannte Materialnamen (Standard-Einheit): ${list('mat')}.
 Bekannte Geräte: ${list('ger')}.
 Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- oder Hörfehlern.${learned.length ? '\nGelernte Zuordnungen (gesprochen → richtig): ' + learned.join('; ') + '.' : ''}`;
@@ -635,7 +686,7 @@ Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- o
       return { name, menge: num(x.menge), einheit: un, raw: rawName };
     });
   };
-  return { abschrift: o.abschrift || '', kopf: o.kopf || null, taetigkeit: applyVocab(o.taetigkeit || o.abschrift || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '', anfahrt: /^(ja|nein)$/i.test(o.anfahrt || '') ? cap(String(o.anfahrt).toLowerCase()) : '', anfahrtInfo: o.anfahrtInfo || '' };
+  return { abschrift: o.abschrift || '', kopf: o.kopf || null, taetigkeit: applyVocab(o.taetigkeit || o.abschrift || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '', anfahrt: /^(ja|nein)$/i.test(o.anfahrt || '') ? cap(String(o.anfahrt).toLowerCase()) : '', anfahrtInfo: o.anfahrtInfo || '', maStunden: (Array.isArray(o.mitarbeiter_stunden) ? o.mitarbeiter_stunden : []).filter(x => x && x.name && num(x.stunden) != null).map(x => ({ name: String(x.name), std: num(x.stunden) })) };
 }
 
 $('ki').onclick = async () => {
@@ -666,6 +717,17 @@ function applyRes(res, how){
   };
   merge('mat', res.material); merge('ger', res.geraete);
   if (res.anfahrt && !$('anfahrt').value){ $('anfahrt').value = res.anfahrt; if (res.anfahrtInfo && !$('anfahrtInfo').value) $('anfahrtInfo').value = res.anfahrtInfo; }
+  if (res.maStunden && res.maStunden.length){
+    const names = splitNames($('mitarbeiter').value); cur.maStd = cur.maStd || {};
+    res.maStunden.forEach(x => {
+      let n = names.find(m => sameP(m, x.name));
+      if (!n){ n = x.name; names.push(n); $('mitarbeiter').value = names.join(', '); }
+      const o = (cur.maStd[n] && typeof cur.maStd[n] === 'object') ? cur.maStd[n] : (cur.maStd[n] = {});
+      o.std = String(x.std).replace('.', ',');
+    });
+    if (document.activeElement && $('stdInfo').contains(document.activeElement)) document.activeElement.blur();
+    toast('Stunden je Mitarbeiter übernommen: ' + res.maStunden.map(x => x.name + ' ' + String(x.std).replace('.', ',') + ' Std').join(', '), 5000);
+  }
   updateStd(); markDirty();
   toast(`Ausgewertet (${how}): ${res.material.length} Material, ${res.geraete.length} Geräte – bitte prüfen. Korrekturen merkt sich die App.`, 5000);
 }
@@ -986,7 +1048,7 @@ function buildPDF(r){
   cellRow([{ l: 'Adresse der Baustelle', v: r.adresse, f: .50 }, { l: 'Auftraggeber / Kunde', v: r.kunde, f: .50 }]);
   cellRow([{ l: 'Bauleiter / Ansprechpartner', v: r.bauleiter, f: .50 }, { l: 'Mitarbeiter', v: r.mitarbeiter, f: .50 }]);
   if (!(wt && wt.list[0].name)) cellRow([{ l: 'Arbeitszeit', v: zeit + (wt ? ' = ' + fmtHM(wt.mins) : ''), f: 1 }]);
-  else wt.list.forEach(x => cellRow([{ l: 'Mitarbeiter', v: x.name, f: .35 }, { l: 'Arbeitszeit (Kommen–Gehen, Pause)', v: x.mins ? `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''}` : '–', f: .35 }, { l: 'Stunden', v: x.mins ? fmtHM(x.mins) + ' (' + fmtDec(x.mins) + ')' : '–', f: .30 }]));
+  else wt.list.forEach(x => cellRow([{ l: 'Mitarbeiter', v: x.name, f: .35 }, { l: 'Arbeitszeit', v: x.direct ? 'direkt erfasst' : x.mins ? `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''}` : '–', f: .35 }, { l: 'Stunden', v: x.mins ? fmtHM(x.mins) + ' (' + fmtDec(x.mins) + ')' : '–', f: .30 }]));
   cellRow([{ l: 'Gesamtstunden' + (wt && wt.n > 1 ? ' (alle Mitarbeiter)' : ''), v: ges, f: 1 }]);
   cellRow([{ l: 'Anfahrt', v: anf, f: 1 }]);
   y += 7;
@@ -1085,10 +1147,22 @@ $('mSave').onclick = async () => {
   const a = document.createElement('a'); a.href = pack.url; a.download = pack.name; document.body.appendChild(a); a.click(); a.remove();
   await setStatus('pdf'); toast('PDF gespeichert (Ordner „Downloads“ / „Dateien“).', 4000);
 };
-$('send').onclick = () => {
-  const r = collect();
+function askAnfahrt(){
+  return new Promise(res => {
+    const m = $('anfModal'), sel = $('anfahrt'); const pre = sel.value;
+    $('anfHint').textContent = pre ? 'Erkannt: ' + pre + ' – bitte bestätigen.' : 'Bitte ausdrücklich angeben, bevor der Rapport fertiggestellt wird.';
+    $('anfInfo').value = $('anfahrtInfo').value; $('anfInfoBox').classList.toggle('hide', pre !== 'Ja');
+    m.style.display = 'flex';
+    const done = v => { m.style.display = 'none'; sel.value = v; sel.dataset.auto = ''; if (v === 'Ja') $('anfahrtInfo').value = $('anfInfo').value.trim(); else $('anfahrtInfo').value = ''; markDirty(); res(v); };
+    $('anfJa').onclick = () => { if ($('anfInfoBox').classList.contains('hide')){ $('anfInfoBox').classList.remove('hide'); $('anfJa').textContent = '✔ Ja – bestätigen'; $('anfInfo').focus(); } else done('Ja'); };
+    $('anfNein').onclick = () => done('Nein');
+    $('anfJa').textContent = pre === 'Ja' ? '✔ Ja – bestätigen' : 'Ja, mit Anfahrt';
+  });
+}
+$('send').onclick = async () => {
+  let r = collect();
   if (!hasContent(r)) return toast('Der Rapport ist noch leer.');
-  if (!r.anfahrt && !confirm('Anfahrt ist nicht angegeben (Ja/Nein). Trotzdem PDF erstellen?')) return;
+  if (!r.anfahrt || $('anfahrt').dataset.auto === '1'){ await askAnfahrt(); r = collect(); }
   if (!r.sig1 && !confirm('Es fehlt die Unterschrift des Mitarbeiters. Trotzdem PDF erstellen?')) return;
   if (!r.nr){ r.nr = nextNr(); $('nr').value = r.nr; }
   DB.put(r).then(() => { dirty = false; }).catch(() => {});

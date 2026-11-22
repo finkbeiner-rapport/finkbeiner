@@ -52,6 +52,8 @@ const KATALOG = {
     ['Profile & Zubehör','Bodenablauf','Stk','Bodenabläufe|Bodeneinlauf|Ablauf'],
     ['Profile & Zubehör','Revisionsöffnung','Stk','Revisionsklappe|Revisionstür|Revisionsoeffnung'],
 
+    ['Sonstiges','Entsorgung','psch','Entsorgungskosten|Müllentsorgung|Containerentsorgung|Bauschutt'],
+    ['Sonstiges','Staubsaugerbeutel','Stk','Saugerbeutel'],
     ['Reinigung & Schutz','Abdeckfolie','m²','Schutzfolie|Abdeckvlies|Malervlies|Folie|Abdeckpapier|Schutzvlies'],
     ['Reinigung & Schutz','Abklebeband','Stk','Kreppband|Malerkrepp|Krepp|Klebeband'],
     ['Reinigung & Schutz','Reinigungsmittel','l','Zementschleierentferner|Fliesenreiniger|Reiniger|Schleierentferner|Grundreiniger'],
@@ -61,6 +63,8 @@ const KATALOG = {
     ['Schneiden','Nassschneider','Std','Nassschneidegerät|Fliesennassschneider|Fliesenschneidemaschine|Tischsäge|Nassfräse|Steinsäge|Fliesensäge|Sägetisch'],
     ['Schneiden','Fliesenschneider','Std','Schneidegerät|Handschneider|Schneidmaschine|Fliesenschneidgerät|Montolit|Rubi'],
     ['Schneiden','Winkelschleifer','Std','Flex|Trennschleifer|Winkelschleifmaschine|Flexgerät|Schleifer'],
+    ['Schleifen & Fräsen','Tellerschleifmaschine','Std','Tellerschleifer|Schleifmaschine|Tellerschleifgerät'],
+    ['Schleifen & Fräsen','Teppichstripper','Std','Stripper|Belagsentferner|Bodenbelagsentferner|Belagstripper'],
     ['Schneiden','Fliesenzange','Std','Knabberzange|Bohrzange|Fliesenbrecher|Zange'],
 
     ['Bohren & Schlagen','Bohrhammer','Std','Hilti|Kombihammer|Schlagbohrer|Meißelhammer|Abbruchhammer|Stemmhammer|Schlagbohrmaschine'],

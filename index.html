@@ -78,7 +78,7 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
 .pit small{color:#6b7785}.pit.on{background:#d5f0df;border-color:var(--gruen)}
 .it2{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rand)}
 .it2 .m{flex:1;min-width:0;display:flex;flex-direction:column}.it2 .btn{padding:6px 10px}
-.mst{background:#fff;border:1px solid var(--rand);border-radius:8px;padding:8px;margin:6px 0}.mrow{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px;margin-top:6px;align-items:center}.mrow .btn{padding:8px 8px;font-size:13px}.mrow input{padding:7px 4px;min-width:0}.mrow input[data-f=pause]{grid-column:1/-1}.mh{font-size:13px;color:#445;margin-top:6px}#stdTot{margin-top:6px}
+.stl{grid-column:1/-1;font-size:12px;color:#6b7785;margin-top:2px}.mst{background:#fff;border:1px solid var(--rand);border-radius:8px;padding:8px;margin:6px 0}.mrow{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px;margin-top:6px;align-items:center}.mrow .btn{padding:8px 8px;font-size:13px}.mrow input{padding:7px 4px;min-width:0}.mrow input[data-f=pause]{grid-column:1/-1}.mh{font-size:13px;color:#445;margin-top:6px}#stdTot{margin-top:6px}
 </style>
 </head>
 <body>
@@ -120,10 +120,7 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
       <div><label for="pause">Pause (Min.)</label><input type="number" inputmode="numeric" id="pause" placeholder="30" min="0"></div>
     </div>
     <div class="hint" id="stdInfo" style="font-size:14px;color:var(--text);background:#eef3f8;border-radius:8px;padding:8px;margin-top:8px"></div>
-    <div class="row">
-      <div><label for="anfahrt">Anfahrt</label><select id="anfahrt"><option value="">– bitte wählen –</option><option>Ja</option><option>Nein</option></select></div>
-      <div style="flex:2"><label for="anfahrtInfo">Anfahrt-Angaben (km / Fahrzeit)</label><input id="anfahrtInfo" placeholder="z. B. 35 km oder 45 Min." autocomplete="off"></div>
-    </div>
+
   </section>
 
   <section class="card">
@@ -158,6 +155,15 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
     <div class="colh"><span>Bezeichnung</span><span>Menge</span><span>Einheit</span><span></span></div>
     <div id="ger"></div>
     <div class="bar"><button class="btn" id="pickGer" type="button">📋 Gerät wählen</button><button class="btn sec" id="addGer" type="button">+ Freie Zeile</button></div>
+  </section>
+
+  <section class="card" id="anfCard">
+    <h2>Anfahrt <small style="color:var(--rot)">(Pflicht)</small></h2>
+    <div class="row">
+      <div><label for="anfahrt">Anfahrt</label><select id="anfahrt"><option value="">– bitte wählen –</option><option>Ja</option><option>Nein</option></select></div>
+      <div style="flex:2"><label for="anfahrtInfo">Anfahrt-Angaben (km / Fahrzeit)</label><input id="anfahrtInfo" placeholder="z. B. 35 km oder 45 Min." autocomplete="off"></div>
+    </div>
+    <div class="hint">Muss vor dem Fertigstellen mit Ja oder Nein bestätigt werden.</div>
   </section>
 
   <section class="card">
@@ -256,6 +262,13 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
   <button class="btn red" id="newBtn" type="button" style="flex:0 0 52px" title="Neuer Rapport" aria-label="Neuer Rapport">＋</button>
 </div>
 
+<div id="anfModal" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120;display:none;align-items:center;justify-content:center;padding:16px"><div style="background:#fff;border-radius:16px;padding:18px;width:100%;max-width:420px">
+  <h3 style="margin:0 0 6px;color:var(--blau)">Gab es eine Anfahrt?</h3>
+  <div class="hint" id="anfHint"></div>
+  <div id="anfInfoBox" class="hide"><label for="anfInfo">Angaben zur Anfahrt (km / Fahrzeit, optional)</label><input id="anfInfo" placeholder="z. B. 35 km oder 45 Min." autocomplete="off"></div>
+  <button class="btn" id="anfJa" type="button" style="width:100%;margin-top:10px">Ja, mit Anfahrt</button>
+  <button class="btn sec" id="anfNein" type="button" style="width:100%;margin-top:8px">Nein, keine Anfahrt</button>
+</div></div>
 <div id="modal"><div class="box">
   <h3 id="mTitle">Rapport fertig – was möchtest du tun?</h3>
   <div class="hint">Der Rapport ist als PDF erstellt und im Archiv gesichert. Wähle, wie es weitergeht. Bei „Per Mail senden“ im Menü Mail oder Gmail wählen, das PDF hängt automatisch an.</div>
