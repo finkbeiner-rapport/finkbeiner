@@ -1,9 +1,9 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '2.7';
+const VERSION = '2.9';
 const $ = id => document.getElementById(id);
-const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Tube','Sack','Eimer','Pkt','Gebinde','m³','t'];
+const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
 const MODEL = 'claude-sonnet-5-5';
 const DEF = {
@@ -122,35 +122,58 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const visible = id => !$(id).classList.contains('hide');
 
 /* ---------- Arbeitszeit ---------- */
+const tmin = x => { const p = String(x || '').split(':'); return p.length === 2 && p[0] !== '' && p[1] !== '' ? +p[0] * 60 + +p[1] : NaN; };
 function workTime(r){
-  const tm = x => { const p = String(x || '').split(':'); return p.length === 2 ? +p[0] * 60 + +p[1] : NaN; };
-  const a = tm(r.von), b = tm(r.bis); if (isNaN(a) || isNaN(b)) return null;
-  const mins = b - a - (num(r.pause) || 0); if (mins <= 0) return null;
   const names = splitNames(r.mitarbeiter); const ov = r.maStd || {};
-  const list = (names.length ? names : ['']).map(n => { const h = num(ov[n]); return { name: n, mins: h != null && h >= 0 ? Math.round(h * 60) : mins, custom: h != null && h >= 0 }; });
-  return { mins, n: list.length, list, man: list.reduce((s, x) => s + x.mins, 0) };
+  const calc = (von, bis, pause) => { const a = tmin(von), b = tmin(bis); if (isNaN(a) || isNaN(b)) return 0; const m = b - a - (num(pause) || 0); return m > 0 ? m : 0; };
+  const list = (names.length ? names : ['']).map(n => {
+    const o = (ov[n] && typeof ov[n] === 'object') ? ov[n] : {};
+    const von = o.von || r.von || '', bis = o.bis || r.bis || '', pause = (o.pause !== undefined && o.pause !== '') ? o.pause : (r.pause || '');
+    return { name: n, von, bis, pause, mins: calc(von, bis, pause), own: !!(o.von || o.bis || (o.pause !== undefined && o.pause !== '')) };
+  });
+  const man = list.reduce((s, x) => s + x.mins, 0); if (!man) return null;
+  return { mins: calc(r.von, r.bis, r.pause) || list[0].mins, n: list.length, list, man };
 }
 const fmtHM = m => Math.floor(m / 60) + ' Std ' + String(Math.round(m % 60)).padStart(2, '0') + ' Min';
 const fmtDec = m => (Math.round(m / 6) / 10).toFixed(1).replace('.', ',') + ' Std';
+const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const curWT = () => workTime({ von: $('von').value, bis: $('bis').value, pause: $('pause').value, mitarbeiter: $('mitarbeiter').value, maStd: cur.maStd });
 function updateStd(){
   const el = $('stdInfo'); if (!el || el.contains(document.activeElement)) return;
-  const w = workTime({ von: $('von').value, bis: $('bis').value, pause: $('pause').value, mitarbeiter: $('mitarbeiter').value, maStd: cur.maStd });
-  if (!w){ el.innerHTML = 'Gesamtstunden: trage Beginn und Ende ein.'; return; }
-  let h = `<b>Arbeitszeit: ${fmtHM(w.mins)} (${fmtDec(w.mins)})</b>`;
-  if (w.list[0].name){
-    h += '<div class="hint" style="margin:6px 0 2px">Stunden je Mitarbeiter (anpassbar, z. B. bei früherem Feierabend):</div>';
-    w.list.forEach((x, i) => { h += `<div class="mst"><span>${esc(x.name)}</span><input data-n="${esc(x.name)}" inputmode="decimal" value="${esc(String(Math.round(x.mins / 6) / 10).replace('.', ','))}"><span>Std</span></div>`; });
+  const names = splitNames($('mitarbeiter').value); const ov = cur.maStd || {};
+  let h = '';
+  if (names.length){
+    h += '<div class="hint" style="margin:0 0 4px">Jeder Mitarbeiter stempelt für sich. Leere Felder übernehmen Beginn/Ende/Pause von oben.</div>';
+    names.forEach(n => {
+      const o = (ov[n] && typeof ov[n] === 'object') ? ov[n] : {};
+      h += `<div class="mst" data-n="${esc(n)}"><b>${esc(n)}</b>
+        <div class="mrow"><button class="btn sec" type="button" data-k="von">▶ Kommen</button><input type="time" data-f="von" value="${esc(o.von || '')}">
+        <button class="btn sec" type="button" data-k="bis">■ Gehen</button><input type="time" data-f="bis" value="${esc(o.bis || '')}">
+        <input type="number" inputmode="numeric" data-f="pause" min="0" placeholder="Pause" value="${esc(o.pause === undefined ? '' : o.pause)}"></div>
+        <div class="mh"></div></div>`;
+    });
   }
-  h += `<div id="stdTot"></div>`;
-  el.innerHTML = h; stdTotal(w);
-  el.querySelectorAll('.mst input').forEach(inp => inp.addEventListener('input', () => {
-    cur.maStd = cur.maStd || {}; cur.maStd[inp.dataset.n] = inp.value; markDirty();
-    stdTotal(workTime({ von: $('von').value, bis: $('bis').value, pause: $('pause').value, mitarbeiter: $('mitarbeiter').value, maStd: cur.maStd }));
-  }));
+  h += '<div id="stdTot"></div>';
+  el.innerHTML = h; stdRefresh();
+  el.querySelectorAll('.mst').forEach(row => {
+    const n = row.dataset.n;
+    const set = (f, v) => { cur.maStd = cur.maStd || {}; const o = (cur.maStd[n] && typeof cur.maStd[n] === 'object') ? cur.maStd[n] : (cur.maStd[n] = {}); o[f] = v; markDirty(); stdRefresh(); };
+    row.querySelectorAll('input').forEach(inp => ['input', 'change'].forEach(ev => inp.addEventListener(ev, () => set(inp.dataset.f, inp.value))));
+    row.querySelectorAll('button').forEach(btn => btn.onclick = () => { const f = btn.dataset.k, t = nowHM(); row.querySelector(`input[data-f="${f}"]`).value = t; set(f, t); toast(n + (f === 'von' ? ' ist gekommen: ' : ' ist gegangen: ') + t, 2500); });
+  });
 }
-function stdTotal(w){ const t = $('stdTot'); if (t && w) t.innerHTML = `<b>Gesamtstunden${w.n > 1 ? ' (alle Mitarbeiter)' : ''}: ${fmtHM(w.man)} (${fmtDec(w.man)})</b>`; }
-['von', 'bis', 'pause'].forEach(id => ['input', 'change'].forEach(ev => $(id).addEventListener(ev, updateStd)));
+function stdRefresh(){
+  const el = $('stdInfo'); if (!el) return; const t = $('stdTot'); if (!t) return;
+  const w = curWT();
+  el.querySelectorAll('.mst').forEach(row => {
+    const x = w && w.list.find(y => y.name === row.dataset.n); const m = row.querySelector('.mh');
+    m.textContent = x && x.mins ? `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''} = ${fmtHM(x.mins)} (${fmtDec(x.mins)})` : 'Zeit noch nicht erfasst';
+  });
+  t.innerHTML = w ? `<b>Gesamtstunden${w.n > 1 ? ' (alle Mitarbeiter)' : ''}: ${fmtHM(w.man)} (${fmtDec(w.man)})</b>` : 'Gesamtstunden: Beginn und Ende eintragen oder stempeln.';
+}
+['von', 'bis', 'pause'].forEach(id => ['input', 'change'].forEach(ev => $(id).addEventListener(ev, () => { if ($('stdTot')) stdRefresh(); else updateStd(); })));
 $('mitarbeiter').addEventListener('input', updateStd);
+$('mitarbeiter').addEventListener('input', () => {});
 
 /* ---------- Zustand ---------- */
 let cur = { id: uid(), fotos: [], status: 'entwurf' };
@@ -376,7 +399,7 @@ const D = (() => {
 const UNIT_MAP = [
   [/^(m²|m2|qm|quadratmeter)$/i, 'm²'], [/^(lfm|lfdm|laufende[nr]? meter|lfd\.? ?m)$/i, 'lfm'],
   [/^(m³|m3|kubikmeter|cbm)$/i, 'm³'], [/^(meter|m)$/i, 'm'], [/^(kg|kilo|kilogramm)$/i, 'kg'],
-  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?)$/i, 'Stk'], [/^(tube|tuben|kartuschen?)$/i, 'Tube'],
+  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?)$/i, 'Stk'], [/^(tube|tuben|kartuschen?)$/i, 'Kartusche'],
   [/^(sack|säcke|saecke)$/i, 'Sack'], [/^(eimer)$/i, 'Eimer'], [/^(pkt|paket|pakete|packung|packungen)$/i, 'Pkt'],
   [/^(gebinde|kanister)$/i, 'Gebinde'], [/^(t|tonnen?)$/i, 't'],
   [/^(std|stunden?|h)$/i, 'Std'], [/^(tage?|tag)$/i, 'Tage'], [/^(min|minuten)$/i, 'Min']
@@ -491,12 +514,24 @@ function parseAnfahrt(t){
 
 /* Live-Erkennung beim Sprechen/Tippen: Anfahrt wird sofort eingetragen */
 function liveScan(){
+  try { liveGer(); } catch(e){}
   const an = parseAnfahrt($('diktat').value + ' ' + $('taetigkeit').value);
   const sel = $('anfahrt'), inf = $('anfahrtInfo');
   if (an.anfahrt && (!sel.value || sel.dataset.auto === '1') && sel.value !== an.anfahrt){
     sel.value = an.anfahrt; sel.dataset.auto = '1'; toast('Anfahrt erkannt: ' + an.anfahrt + (an.info ? ' (' + an.info + ')' : ''), 3000);
   }
   if (an.info && sel.dataset.auto === '1' && (!inf.value || inf.dataset.auto === '1')){ inf.value = an.info; inf.dataset.auto = '1'; }
+}
+function liveGer(){
+  const text = $('diktat').value + ' ' + $('taetigkeit').value; cur.autoGer = cur.autoGer || [];
+  VERB_GER.forEach(([re, name]) => {
+    if (!re.test(text) || cur.autoGer.includes(name)) return;
+    if (rows('ger').some(x => sq(x.name) === sq(name))){ cur.autoGer.push(name); return; }
+    const e = CAT.get('ger').find(x => x.n === name); if (!e) return;
+    cur.autoGer.push(name); const last = $('ger').lastElementChild;
+    if (last && !last.querySelector('.n').value.trim()) last.remove();
+    addRow('ger', { name: e.n, einheit: e.u === 'Tage' ? 'Tage' : 'Std', raw: e.n }); markDirty(); toast('Gerät erkannt: ' + e.n, 3000);
+  });
 }
 $('anfahrt').addEventListener('change', () => { $('anfahrt').dataset.auto = ''; });
 $('anfahrtInfo').addEventListener('input', () => { $('anfahrtInfo').dataset.auto = ''; });
@@ -874,8 +909,8 @@ function buildPDF(r){
   cellRow([{ l: 'Objekt / Baustelle', v: r.objekt, f: .60 }, { l: 'Wetter', v: r.wetter, f: .40 }]);
   cellRow([{ l: 'Adresse der Baustelle', v: r.adresse, f: .50 }, { l: 'Auftraggeber / Kunde', v: r.kunde, f: .50 }]);
   cellRow([{ l: 'Bauleiter / Ansprechpartner', v: r.bauleiter, f: .50 }, { l: 'Mitarbeiter', v: r.mitarbeiter, f: .50 }]);
-  cellRow([{ l: 'Arbeitszeit', v: zeit + (wt ? ' = ' + fmtHM(wt.mins) : ''), f: 1 }]);
-  if (wt && wt.list[0].name) wt.list.forEach(x => cellRow([{ l: 'Stunden Mitarbeiter', v: x.name, f: .6 }, { l: 'Std', v: fmtHM(x.mins) + ' (' + fmtDec(x.mins) + ')', f: .4 }]));
+  if (!(wt && wt.list[0].name)) cellRow([{ l: 'Arbeitszeit', v: zeit + (wt ? ' = ' + fmtHM(wt.mins) : ''), f: 1 }]);
+  else wt.list.forEach(x => cellRow([{ l: 'Mitarbeiter', v: x.name, f: .35 }, { l: 'Arbeitszeit (Kommen–Gehen, Pause)', v: x.mins ? `${x.von}–${x.bis} Uhr${x.pause ? ', Pause ' + x.pause + ' Min.' : ''}` : '–', f: .35 }, { l: 'Stunden', v: x.mins ? fmtHM(x.mins) + ' (' + fmtDec(x.mins) + ')' : '–', f: .30 }]));
   cellRow([{ l: 'Gesamtstunden' + (wt && wt.n > 1 ? ' (alle Mitarbeiter)' : ''), v: ges, f: 1 }]);
   cellRow([{ l: 'Anfahrt', v: anf, f: 1 }]);
   y += 7;

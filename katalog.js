@@ -33,8 +33,8 @@ const KATALOG = {
 
     ['Fugen & Silikon','Fugenmasse','kg','Fugenmörtel|Fugenmoertel|Fuge|Fugen|Fugenfüller'],
     ['Fugen & Silikon','Epoxidfugenmörtel','kg','Epoxidfuge|Epoxyfuge|Epoxid'],
-    ['Fugen & Silikon','Silikon','Tube','Sanitärsilikon|Sanitaersilikon|Silicon|Fugensilikon|Kartusche'],
-    ['Fugen & Silikon','Acryl','Tube','Acrylfuge|Acrylkartusche'],
+    ['Fugen & Silikon','Silikon','Kartusche','Sanitärsilikon|Sanitaersilikon|Silicon|Fugensilikon'],
+    ['Fugen & Silikon','Acryl','Kartusche','Acrylfuge|Acrylkartusche'],
 
     ['Abdichtung & Grund','Grundierung','l','Tiefengrund|Haftgrund|Primer|Voranstrich|Tiefengrundierung|Quarzgrund'],
     ['Abdichtung & Grund','Dichtschlämme','kg','Dichtschlaemme|Dichtungsschlämme|Abdichtung|Verbundabdichtung'],
