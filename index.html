@@ -64,7 +64,7 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
 #inst{display:none;background:#fff7d6;border:1px solid #ecd98a;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px}
 #inst .bar{margin-top:6px}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:flex-end;justify-content:center}
-#modal .box{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+#modal .box{max-height:92vh;overflow:auto;background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
 #modal h3{margin:0 0 4px;color:var(--blau)}
 #modal .btn{width:100%;margin-top:8px}
 #logoPrev{max-height:60px;max-width:200px;display:none;border:1px solid var(--rand);border-radius:6px;padding:4px;margin-top:6px;background:#fff}
@@ -234,6 +234,13 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
   </section>
   <div class="bar" style="margin:0 0 12px"><button class="btn" id="saveSet" type="button" style="width:100%">Einstellungen speichern</button></div>
   <section class="card">
+    <h2>Datenbank &amp; Sicherung</h2>
+    <div class="hint" id="dbInfo"></div>
+    <div class="hint">Alle Rapporte (mit Fotos und Unterschriften), Kunden, Mitarbeiter und Gelerntes liegen in der Datenbank dieser App auf dem Gerät. Mit der Sicherung kannst du alles als Datei ablegen oder auf ein anderes Gerät übertragen.</div>
+    <div class="bar"><button class="btn" id="dbExport" type="button">⬇️ Sicherung erstellen</button><button class="btn sec" id="dbImport" type="button">⬆️ Sicherung einspielen</button></div>
+    <input type="file" id="dbFile" accept=".json,application/json" class="hide">
+  </section>
+  <section class="card">
     <h2>Installation</h2>
     <div class="hint"><b>iPhone:</b> in Safari öffnen → Teilen-Symbol → „Zum Home-Bildschirm“.<br><b>Android:</b> in Chrome öffnen → Menü ⋮ → „App installieren“.<br>Danach startet die App wie eine normale App, auch ohne Netz.</div>
     <div class="hint" id="ver"></div>
@@ -243,15 +250,17 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
 
 <div class="bottom" id="bottom">
   <button class="btn sec" id="save" type="button">💾 Speichern</button>
-  <button class="btn" id="send" type="button">📄 PDF &amp; Mail</button>
+  <button class="btn" id="send" type="button">✔ Fertigstellen</button>
   <button class="btn red" id="newBtn" type="button" style="flex:0 0 52px" title="Neuer Rapport" aria-label="Neuer Rapport">＋</button>
 </div>
 
 <div id="modal"><div class="box">
-  <h3>PDF ist fertig</h3>
-  <div class="hint">Zum Versenden mit Anhang: „Per Mail senden“ tippen und im Menü Mail oder Gmail wählen. Das PDF hängt dann automatisch an.</div>
+  <h3 id="mTitle">Rapport fertig – was möchtest du tun?</h3>
+  <div class="hint">Der Rapport ist als PDF erstellt und im Archiv gesichert. Wähle, wie es weitergeht. Bei „Per Mail senden“ im Menü Mail oder Gmail wählen, das PDF hängt automatisch an.</div>
   <div class="hint" id="mInfo"></div>
   <button class="btn" id="mShare" type="button">📤 Per Mail senden (PDF im Anhang)</button>
+  <button class="btn grn" id="mDone" type="button">✔ Nur speichern (Archiv)</button>
+  <button class="btn sec" id="mNew" type="button">＋ Speichern &amp; neuen Rapport beginnen</button>
   <button class="btn sec" id="mMail" type="button">✉️ Nur Mail-Text (ohne Anhang)</button>
   <button class="btn sec" id="mView" type="button">👁 PDF ansehen</button>
   <button class="btn sec" id="mSave" type="button">⬇️ PDF speichern</button>

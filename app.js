@@ -1,7 +1,7 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '2.9';
+const VERSION = '3.0';
 const $ = id => document.getElementById(id);
 const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
@@ -250,6 +250,9 @@ function onRowName(kind, el){
     }
   }
   n.value = final;
+  if (!m || m.len < 4){
+    const d = D.get(); if (final.length >= 3 && !d.custom[kind].some(c => sq(c.n) === sq(final))){ d.custom[kind].push({ n: final, u: sel.value }); D.save(); toast('Neu gelernt: „' + final + '“ (' + sel.value + ')'); }
+  }
   const orig = (el.dataset.orig || '').trim();
   if (orig && sq(orig) !== sq(final)){ D.get().alias[kind][orig.toLowerCase()] = { n: m && m.len >= 4 ? m.e.n : final, u: sel.value }; D.save(); toast('Gemerkt: „' + orig + '“ → „' + final + '“'); }
   markDirty();
@@ -818,14 +821,14 @@ async function renderArchiv(){
   const box = $('liste'); box.innerHTML = list.length ? '' : '<div class="hint">Noch keine Rapporte gespeichert.</div>';
   list.forEach(r => {
     const d = document.createElement('div'); d.className = 'it';
-    const badge = r.status === 'versendet' ? '<span class="badge v">versendet</span>' : '<span class="badge">' + (r.status === 'pdf' ? 'PDF erstellt' : 'Entwurf') + '</span>';
+    const badge = r.status === 'versendet' ? '<span class="badge v">versendet</span>' : '<span class="badge">' + (r.status === 'pdf' ? 'PDF erstellt' : r.status === 'fertig' ? 'fertig' : 'Entwurf') + '</span>';
     d.innerHTML = `<div class="m"><b>${esc(fmtDate(r.datum))} – ${esc(r.objekt || 'ohne Objekt')}</b><span class="hint">${esc(r.nr || '')}${r.mitarbeiter ? ' · ' + esc(r.mitarbeiter) : ''}${r.fotos && r.fotos.length ? ' · ' + r.fotos.length + ' Foto(s)' : ''}</span>${badge}</div>
       <div class="bar" style="margin:0;flex-wrap:nowrap"><button class="btn sec o" type="button">Öffnen</button><button class="btn sec p" type="button">PDF</button><button class="btn red d" type="button" aria-label="Löschen">✕</button></div>`;
     d.querySelector('.o').onclick = async () => {
       if (dirty) { try { await save(true); } catch(e){} }
       fill(r); show('neu'); window.scrollTo(0, 0);
     };
-    d.querySelector('.p').onclick = () => makePDF(r);
+    d.querySelector('.p').onclick = () => makePDF(r, false);
     d.querySelector('.d').onclick = async () => {
       if (!confirm('Rapport „' + (r.objekt || r.nr || 'ohne Titel') + '“ endgültig löschen?')) return;
       await DB.del(r.id); if (cur.id === r.id){ fresh(); } renderArchiv();
@@ -958,7 +961,7 @@ function buildPDF(r){
 
 /* ---------- PDF-Ausgabe: Teilen / Mail / Speichern ---------- */
 let pack = null;
-async function makePDF(r, auto = true){
+async function makePDF(r, auto = false){
   let doc;
   try { doc = buildPDF(r); } catch(e){ console.error(e); return toast('PDF-Erstellung fehlgeschlagen: ' + e.message, 6000); }
   const safe = (r.objekt || 'Rapport').replace(/[^\wäöüÄÖÜß\- ]+/g, '').trim().replace(/\s+/g, '_').slice(0, 40) || 'Rapport';
@@ -972,6 +975,7 @@ async function makePDF(r, auto = true){
   $('mInfo').textContent = `${name} · ${Math.round(blob.size / 1024)} KB`;
   $('mShare').classList.toggle('hide', !canShare);
   // Direkt das Teilen-Menü öffnen: dort „Mail“ wählen, das PDF hängt automatisch an
+  $('mTitle').textContent = 'Rapport fertig – was möchtest du tun?';
   if (auto && canShare){
     try {
       await navigator.share({ files: [file], title: subject, text: body });
@@ -984,11 +988,13 @@ async function makePDF(r, auto = true){
 }
 async function setStatus(st){
   if (!pack) return; const r = pack.r;
-  if (r.status === 'versendet') return;
+  if (r.status === 'versendet' || (st === 'pdf' && r.status === 'fertig')) return;
   r.status = st; if (cur.id === r.id) cur.status = st;
   try { const stored = r.id === cur.id ? collect() : r; stored.status = st; await DB.put(stored); } catch(e){}
 }
 $('mClose').onclick = () => { $('modal').style.display = 'none'; };
+$('mDone').onclick = async () => { await setStatus('fertig'); $('modal').style.display = 'none'; toast('Im Archiv gespeichert', 3000); };
+$('mNew').onclick = async () => { await setStatus('fertig'); $('modal').style.display = 'none'; fresh(); window.scrollTo(0, 0); toast('Neuer Rapport – der vorige liegt im Archiv', 3500); };
 $('modal').onclick = e => { if (e.target === $('modal')) $('modal').style.display = 'none'; };
 $('mShare').onclick = async () => {
   try { await navigator.share({ files: [pack.file], title: pack.subject, text: pack.body }); await setStatus('versendet'); $('modal').style.display = 'none'; toast('Geteilt'); }
@@ -1013,7 +1019,7 @@ $('send').onclick = () => {
   if (!r.nr){ r.nr = nextNr(); $('nr').value = r.nr; }
   DB.put(r).then(() => { dirty = false; }).catch(() => {});
   try { learnFromReport(r); learnUsage(r); } catch(e){}
-  makePDF(r, true);
+  makePDF(r, false);
 };
 
 /* ---------- Navigation & Einstellungen ---------- */
@@ -1026,7 +1032,7 @@ function show(v){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   $('bottom').classList.toggle('hide', v !== 'neu');
   if (v === 'archiv') renderArchiv();
-  if (v === 'set') renderLists();
+  if (v === 'set'){ renderLists(); dbInfo(); }
   if (v === 'neu') requestAnimationFrame(() => { sig1.size(); sig2.size(); sig1.load(sig1.url); sig2.load(sig2.url); });
   if (v === 'set'){
     const s = S.get();
@@ -1061,6 +1067,34 @@ $('logoFile').onchange = async e => {
   finally { URL.revokeObjectURL(u); }
 };
 $('logoDel').onclick = async () => { try { localStorage.removeItem('rp_logo'); } catch(e){} LOGO = null; await loadLogo(); $('logoPrev').style.display = LOGO ? 'block' : 'none'; if (LOGO) $('logoPrev').src = LOGO.url; toast('Logo entfernt'); };
+
+/* ---------- Datenbank: Sicherung / Wiederherstellung ---------- */
+async function dbInfo(){
+  try { const all = (await DB.all()) || []; $('dbInfo').textContent = `Auf diesem Gerät gespeichert: ${all.length} Rapport(e), ${D.get().kunden.length} Kunde(n), ${D.get().ma.length} Mitarbeiter.`; } catch(e){ $('dbInfo').textContent = 'Datenbank nicht lesbar.'; }
+}
+$('dbExport').onclick = async () => {
+  try {
+    const s = Object.assign({}, S.get()); delete s.key;
+    const dump = { app: 'finkbeiner-rapport', version: VERSION, exportiert: new Date().toISOString(), rapporte: (await DB.all()) || [], daten: D.get(), einstellungen: s, nr: localStorage.getItem('rp_nr') || '' };
+    const blob = new Blob([JSON.stringify(dump)], { type: 'application/json' });
+    const fn = `Finkbeiner_Rapport_Sicherung_${today()}.json`; const file = new File([blob], fn, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })){ try { await navigator.share({ files: [file], title: fn }); return toast('Sicherung geteilt'); } catch(e){ if (e && e.name === 'AbortError') return; } }
+    const u = URL.createObjectURL(blob); const l = document.createElement('a'); l.href = u; l.download = fn; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000);
+    toast('Sicherung gespeichert (Downloads / Dateien)', 4000);
+  } catch(e){ toast('Sicherung fehlgeschlagen: ' + (e && e.message || e), 5000); }
+};
+$('dbImport').onclick = () => $('dbFile').click();
+$('dbFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const dump = JSON.parse(await f.text()); if (dump.app !== 'finkbeiner-rapport') throw new Error('Keine Sicherungsdatei dieser App');
+    if (!confirm('Sicherung einspielen? Rapporte werden zusammengeführt (der neuere Stand gewinnt), Kunden, Mitarbeiter und Gelerntes ersetzt.')) return;
+    const have = new Map(((await DB.all()) || []).map(r => [r.id, r])); let n = 0;
+    for (const r of dump.rapporte || []){ const x = have.get(r.id); if (!x || (r.updated || 0) > (x.updated || 0)){ await DB.put(r); n++; } }
+    if (dump.daten){ localStorage.setItem('rp_data', JSON.stringify(dump.daten)); location.reload(); return; }
+    toast(n + ' Rapport(e) übernommen', 4000); dbInfo();
+  } catch(err){ toast('Einspielen fehlgeschlagen: ' + (err && err.message || err), 5000); }
+};
 
 /* ---------- Installations-Hinweis ---------- */
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
