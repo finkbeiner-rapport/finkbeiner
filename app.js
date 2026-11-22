@@ -1,7 +1,7 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '3.2';
+const VERSION = '3.3';
 const $ = id => document.getElementById(id);
 const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Kartusche','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
@@ -1040,8 +1040,9 @@ async function makePDF(r, auto = false){
   const safe = (r.objekt || 'Rapport').replace(/[^\wäöüÄÖÜß\- ]+/g, '').trim().replace(/\s+/g, '_').slice(0, 40) || 'Rapport';
   const name = `Tagesrapport_${r.datum || today()}_${safe}.pdf`;
   const blob = doc.output('blob'); const file = new File([blob], name, { type: 'application/pdf' });
-  const subject = `Tagesrapport ${fmtDate(r.datum)}${r.nr ? ' (' + r.nr + ')' : ''}${r.objekt ? ' – ' + r.objekt : ''}`;
-  const body = `Guten Tag,\n\nanbei der Tagesrapport vom ${fmtDate(r.datum)}${r.objekt ? ' für ' + r.objekt : ''}.\n\nMit freundlichen Grüßen\n${r.mitarbeiter || eff('firma')}`;
+  const subject = `Tagesrapport ${fmtDate(r.datum)}${r.kunde ? ' – ' + r.kunde : ''}${r.objekt ? ' – ' + r.objekt : ''}${r.nr ? ' (' + r.nr + ')' : ''}`;
+  const zeilen = [r.kunde && 'Auftraggeber: ' + r.kunde, r.objekt && 'Objekt: ' + r.objekt, r.adresse && 'Baustelle: ' + r.adresse, r.nr && 'Rapport-Nr.: ' + r.nr].filter(Boolean);
+  const body = `Guten Tag,\n\nanbei erhalten Sie den Tagesrapport vom ${fmtDate(r.datum)}.\n\n${zeilen.length ? zeilen.join('\n') + '\n\n' : ''}Mit freundlichen Grüßen\n${eff('firma')}${eff('kontakt') ? '\n' + eff('kontakt') : ''}`;
   if (pack && pack.url) URL.revokeObjectURL(pack.url);
   pack = { r, blob, file, name, subject, body, url: URL.createObjectURL(blob) };
   const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
