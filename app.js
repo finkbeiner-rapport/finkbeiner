@@ -3,7 +3,7 @@
 
 const VERSION = '2.4';
 const $ = id => document.getElementById(id);
-const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Sack','Eimer','Pkt','Gebinde','m³','t'];
+const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Tube','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
 const MODEL = 'claude-sonnet-5-5';
 const DEF = {
@@ -344,17 +344,18 @@ const D = (() => {
 const UNIT_MAP = [
   [/^(m²|m2|qm|quadratmeter)$/i, 'm²'], [/^(lfm|lfdm|laufende[nr]? meter|lfd\.? ?m)$/i, 'lfm'],
   [/^(m³|m3|kubikmeter|cbm)$/i, 'm³'], [/^(meter|m)$/i, 'm'], [/^(kg|kilo|kilogramm)$/i, 'kg'],
-  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?|kartuschen?)$/i, 'Stk'],
+  [/^(g|gramm)$/i, 'g'], [/^(l|liter)$/i, 'l'], [/^(stk|stück|stueck|st|rollen?)$/i, 'Stk'], [/^(tube|tuben|kartuschen?)$/i, 'Tube'],
   [/^(sack|säcke|saecke)$/i, 'Sack'], [/^(eimer)$/i, 'Eimer'], [/^(pkt|paket|pakete|packung|packungen)$/i, 'Pkt'],
   [/^(gebinde|kanister)$/i, 'Gebinde'], [/^(t|tonnen?)$/i, 't'],
   [/^(std|stunden?|h)$/i, 'Std'], [/^(tage?|tag)$/i, 'Tage'], [/^(min|minuten)$/i, 'Min']
 ];
 function normUnit(u){ if (!u) return null; u = String(u).trim(); for (const [re, n] of UNIT_MAP) if (re.test(u)) return n; return null; }
-const UNITRE = 'm²|m2|m³|m3|qm|quadratmeter|kubikmeter|lfm|lfdm|laufende[nr]? meter|kilogramm|kilo|kg|gramm|liter|stück|stk|säcke|sack|eimer|pakete|paket|packungen|packung|kartuschen|kartusche|rollen|rolle|gebinde|kanister|tonnen|stunden|stunde|std|minuten|min|tage|tag|meter|m|g|l|t|h';
+const UNITRE = 'm²|m2|m³|m3|qm|quadratmeter|kubikmeter|lfm|lfdm|laufende[nr]? meter|kilogramm|kilo|kg|gramm|liter|stück|stk|säcke|sack|eimer|pakete|paket|packungen|packung|tuben|tube|kartuschen|kartusche|rollen|rolle|gebinde|kanister|tonnen|stunden|stunde|std|minuten|min|tage|tag|meter|m|g|l|t|h';
 const GERAET_RE = /(schneider|rührgerät|ruehrgeraet|rührer|bohrmaschine|bohrhammer|gerüst|gerueste|mischer|rüttler|rüttelplatte|schleifer|flex|laser|kompressor|sauger|staubsauger|leiter|hubwagen|kran|aufzug|maschine|gerät|wasserwaage|pumpe|heizer|trockner)/i;
 const NUM_WORDS = { ein: 1, eine: 1, einen: 1, zwei: 2, drei: 3, vier: 4, fünf: 5, sechs: 6, sieben: 7, acht: 8, neun: 9, zehn: 10, elf: 11, zwölf: 12 };
 const NUMWORD_RE = new RegExp('\\b(ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)\\b(?=\\s+(?:' + UNITRE + ')(?=[\\s,.;:)]|$))', 'gi');
 const VERB_RE = /\s+(?:verlegt|verbraucht|benutzt|verwendet|eingesetzt|gebraucht|wurde|wurden|gefliest|gelegt|geklebt|verfugt|angemischt|montiert|eingebaut|gesetzt|abgedichtet|gespachtelt|verarbeitet)\b.*$/i;
+const STOP_RE = /\s+(?:und|sowie|anschließend|anschliessend|danach|dann|außerdem|ausserdem|wir|haben|hat|mit|dem|der|den|wurde|wurden|wurd|ist|sind|noch|dazu|zusätzlich)\b.*$/i;
 const FILLER_RE = /^(?:ca\.?|circa|etwa|ungefähr|insgesamt|noch|weitere?n?|zusätzlich|nochmal|davon|von|an|vom|der|die|das|des|und|sowie|verlegt|verbraucht|benutzt|verwendet|eingesetzt|wurden|wurde)\s+/i;
 const cap = n => n.charAt(0).toUpperCase() + n.slice(1);
 const sq = s => String(s || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]/g, '');
@@ -454,7 +455,9 @@ function parseLocal(text0){
   terms.sort((a, b) => b.x.s.length - a.x.s.length);
   terms.forEach(({ e, x }) => {
     const re = new RegExp('(^|[^a-zäöüß0-9])(?:' + x.body + ')(?:n|en|e|s|er|es)?(?![a-zäöüß])\\s*[:=\\-–]?\\s*(?:von\\s+|je\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(' + UNITRE + ')(?=[\\s,.;:)]|$)', 'gi');
-    t = t.replace(re, (m, pre, q, u) => { const un = normUnit(u); if (!un) return m; push(e.kind, e.n, num(q), un, x.t); return pre + ' '; });
+    t = t.replace(re, (m, pre, q, u, off, whole) => { const un = normUnit(u); if (!un) return m;
+      if (new RegExp('\\d\\s*(?:' + UNITRE + ')\\s*(?:von\\s+)?$', 'i').test(whole.slice(0, off + pre.length))) return m;
+      push(e.kind, e.n, num(q), un, x.t); return pre + ' '; });
   });
 
   // B) Menge vor Name: "14 Quadratmeter Bodenfliesen 60x60", "4 Stunden Nassschneider"
@@ -463,15 +466,18 @@ function parseLocal(text0){
     const unit = normUnit(u); nm = (nm || '').replace(/\s+/g, ' ').trim();
     if (!unit) return m; if (!nm) return ' ';
     let guard = 0; while (FILLER_RE.test(nm) && guard++ < 4) nm = nm.replace(FILLER_RE, '');
-    const rawName = nm.replace(VERB_RE, '').trim();
+    const full = nm;
+    let rawName = nm.replace(VERB_RE, '').replace(STOP_RE, '').trim();
+    rawName = rawName.split(' ').slice(0, 5).join(' ');
+    const leftover = full.slice(full.indexOf(rawName) + rawName.length);
     if (rawName.length < 2) return ' ';
     let name, kind; const r = canonAny(rawName);
-    if (r){ const sp = specOf(r.rest); name = r.e.n + (sp ? ' ' + sp : ''); kind = r.e.kind; }
+    if (r){ const sp = specOf(r.rest); const col = (r.rest.match(/\b(grau|graue|graues|weiß|weiße|schwarz|schwarze|beige|anthrazit|braun|braune|creme|grün|blau|rot)\b/i) || [])[0]; name = r.e.n + (col ? ' ' + col.toLowerCase().replace(/e$/, '') : '') + (sp ? ' ' + sp : ''); kind = r.e.kind; }
     else { name = cap(rawName); kind = (['Std', 'Tage', 'Min'].includes(unit) || GERAET_RE.test(rawName)) ? 'ger' : 'mat'; }
     const g = gq ? 'à ' + gq + ' ' + gu : gebinde[sq(rawName)];
     if (g && kind === 'mat') name += ' (' + g + ')';
     push(kind, name, num(q), unit, rawName);
-    return ' ';
+    return ' ' + leftover + ' ';
   });
 
   // C) Geräte ohne Mengenangabe ("Benutzt wurden Nassschneider und Rührgerät")

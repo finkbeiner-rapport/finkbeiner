@@ -33,12 +33,13 @@ const KATALOG = {
 
     ['Fugen & Silikon','Fugenmasse','kg','Fugenmörtel|Fugenmoertel|Fuge|Fugen|Fugenfüller'],
     ['Fugen & Silikon','Epoxidfugenmörtel','kg','Epoxidfuge|Epoxyfuge|Epoxid'],
-    ['Fugen & Silikon','Silikon','Stk','Sanitärsilikon|Sanitaersilikon|Silicon|Fugensilikon|Kartusche'],
-    ['Fugen & Silikon','Acryl','Stk','Acrylfuge|Acrylkartusche'],
+    ['Fugen & Silikon','Silikon','Tube','Sanitärsilikon|Sanitaersilikon|Silicon|Fugensilikon|Kartusche'],
+    ['Fugen & Silikon','Acryl','Tube','Acrylfuge|Acrylkartusche'],
 
     ['Abdichtung & Grund','Grundierung','l','Tiefengrund|Haftgrund|Primer|Voranstrich|Tiefengrundierung|Quarzgrund'],
     ['Abdichtung & Grund','Dichtschlämme','kg','Dichtschlaemme|Dichtungsschlämme|Abdichtung|Verbundabdichtung'],
     ['Abdichtung & Grund','Flüssigfolie','kg','Fluessigfolie|Flüssigabdichtung|Flüssigkunststoff'],
+    ['Abdichtung & Grund','Dichtmasse','l','Dichtungsmasse|Abdichtmasse'],
     ['Abdichtung & Grund','Dichtband','lfm','Dichtbänder|Dichtungsband|Abdichtband'],
     ['Abdichtung & Grund','Dichtmanschetten','Stk','Dichtmanschette|Manschette|Wandmanschette|Bodenmanschette'],
     ['Abdichtung & Grund','Dichtecken','Stk','Dichtecke|Innenecken|Außenecken'],
