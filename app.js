@@ -1,7 +1,7 @@
 'use strict';
 /* Tagesrapport – Fliesen Finkbeiner | eigenständige PWA (iPhone + Android) */
 
-const VERSION = '2.4';
+const VERSION = '2.7';
 const $ = id => document.getElementById(id);
 const MAT_UNITS = ['m²','lfm','m','kg','g','l','Stk','Tube','Sack','Eimer','Pkt','Gebinde','m³','t'];
 const GER_UNITS = ['Std','Tage','Stk','Min'];
@@ -121,11 +121,42 @@ const fmtNum = n => n == null ? '' : String(n).replace('.', ',');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const visible = id => !$(id).classList.contains('hide');
 
+/* ---------- Arbeitszeit ---------- */
+function workTime(r){
+  const tm = x => { const p = String(x || '').split(':'); return p.length === 2 ? +p[0] * 60 + +p[1] : NaN; };
+  const a = tm(r.von), b = tm(r.bis); if (isNaN(a) || isNaN(b)) return null;
+  const mins = b - a - (num(r.pause) || 0); if (mins <= 0) return null;
+  const names = splitNames(r.mitarbeiter); const ov = r.maStd || {};
+  const list = (names.length ? names : ['']).map(n => { const h = num(ov[n]); return { name: n, mins: h != null && h >= 0 ? Math.round(h * 60) : mins, custom: h != null && h >= 0 }; });
+  return { mins, n: list.length, list, man: list.reduce((s, x) => s + x.mins, 0) };
+}
+const fmtHM = m => Math.floor(m / 60) + ' Std ' + String(Math.round(m % 60)).padStart(2, '0') + ' Min';
+const fmtDec = m => (Math.round(m / 6) / 10).toFixed(1).replace('.', ',') + ' Std';
+function updateStd(){
+  const el = $('stdInfo'); if (!el || el.contains(document.activeElement)) return;
+  const w = workTime({ von: $('von').value, bis: $('bis').value, pause: $('pause').value, mitarbeiter: $('mitarbeiter').value, maStd: cur.maStd });
+  if (!w){ el.innerHTML = 'Gesamtstunden: trage Beginn und Ende ein.'; return; }
+  let h = `<b>Arbeitszeit: ${fmtHM(w.mins)} (${fmtDec(w.mins)})</b>`;
+  if (w.list[0].name){
+    h += '<div class="hint" style="margin:6px 0 2px">Stunden je Mitarbeiter (anpassbar, z. B. bei früherem Feierabend):</div>';
+    w.list.forEach((x, i) => { h += `<div class="mst"><span>${esc(x.name)}</span><input data-n="${esc(x.name)}" inputmode="decimal" value="${esc(String(Math.round(x.mins / 6) / 10).replace('.', ','))}"><span>Std</span></div>`; });
+  }
+  h += `<div id="stdTot"></div>`;
+  el.innerHTML = h; stdTotal(w);
+  el.querySelectorAll('.mst input').forEach(inp => inp.addEventListener('input', () => {
+    cur.maStd = cur.maStd || {}; cur.maStd[inp.dataset.n] = inp.value; markDirty();
+    stdTotal(workTime({ von: $('von').value, bis: $('bis').value, pause: $('pause').value, mitarbeiter: $('mitarbeiter').value, maStd: cur.maStd }));
+  }));
+}
+function stdTotal(w){ const t = $('stdTot'); if (t && w) t.innerHTML = `<b>Gesamtstunden${w.n > 1 ? ' (alle Mitarbeiter)' : ''}: ${fmtHM(w.man)} (${fmtDec(w.man)})</b>`; }
+['von', 'bis', 'pause'].forEach(id => ['input', 'change'].forEach(ev => $(id).addEventListener(ev, updateStd)));
+$('mitarbeiter').addEventListener('input', updateStd);
+
 /* ---------- Zustand ---------- */
 let cur = { id: uid(), fotos: [], status: 'entwurf' };
 let dirty = false;
 const markDirty = () => { dirty = true; };
-const FIELDS = ['datum','nr','objekt','projekt','wetter','adresse','kunde','bauleiter','mitarbeiter','von','bis','pause','diktat','taetigkeit','bemerkung','kundeName'];
+const FIELDS = ['datum','nr','objekt','projekt','wetter','adresse','kunde','bauleiter','mitarbeiter','von','bis','pause','anfahrt','anfahrtInfo','diktat','taetigkeit','bemerkung','kundeName'];
 
 function collect(){
   const r = { id: cur.id, fotos: cur.fotos, status: cur.status || 'entwurf', created: cur.created || Date.now() };
@@ -133,7 +164,7 @@ function collect(){
   r.diktat = $('diktat').value; r.taetigkeit = $('taetigkeit').value; r.bemerkung = $('bemerkung').value;
   r.material = rows('mat'); r.geraete = rows('ger');
   r.sig1 = sig1.data(); r.sig2 = sig2.data();
-  r.updated = Date.now();
+  r.maStd = cur.maStd || {}; r.updated = Date.now();
   return r;
 }
 function hasContent(r){
@@ -141,7 +172,7 @@ function hasContent(r){
     (r.material || []).length || (r.geraete || []).length || (r.fotos || []).length || r.sig1 || r.sig2);
 }
 function fill(r){
-  cur = { id: r.id, fotos: r.fotos || [], status: r.status || 'entwurf', created: r.created };
+  cur = { id: r.id, fotos: r.fotos || [], status: r.status || 'entwurf', created: r.created, maStd: r.maStd || {} };
   FIELDS.forEach(f => $(f).value = r[f] || '');
   $('mat').innerHTML = ''; $('ger').innerHTML = '';
   (r.material || []).forEach(m => addRow('mat', m));
@@ -150,6 +181,7 @@ function fill(r){
   if (!(r.geraete || []).length) addRow('ger');
   renderPhotos();
   sig1.load(r.sig1 || ''); sig2.load(r.sig2 || '');
+  updateStd();
   dirty = false;
 }
 function fresh(){ fill({ id: uid(), datum: today(), mitarbeiter: S.get().ma || '' }); }
@@ -299,7 +331,7 @@ function Mic(btn, area, label){
         if (e.results[i].isFinal) fin += t; else interim += t;
       }
       if (fin) base += (base && !/\s$/.test(base) ? ' ' : '') + fin.trim();
-      area.value = base + (interim ? (base ? ' ' : '') + interim : ''); markDirty();
+      area.value = base + (interim ? (base ? ' ' : '') + interim : ''); markDirty(); liveScan();
     };
     rec.onerror = e => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){ on = false; ui(); toast('Mikrofon nicht erlaubt – bitte in den Geräte-Einstellungen freigeben.', 5000); }
@@ -435,6 +467,41 @@ function applyVocab(text){
   return t;
 }
 
+/* Tätigkeit -> Gerät (Wortstämme) */
+const VERB_GER = [
+  [/(abgesaugt|absaug|aufgesaugt|gesaugt|staubgesaugt|saugen)/i, 'Bausauger'],
+  [/(zugeschnitten|geschnitten|zuschnitt|zugeschnitt|gesägt)/i, 'Fliesenschneider'],
+  [/(gebohrt|gebohrten|durchbohrt|löcher gebohrt)/i, 'Bohrmaschine'],
+  [/(angerührt|angemischt|angeruehrt|gerührt|aufgerührt|angemixt)/i, 'Rührgerät'],
+  [/(gestemmt|gemeißelt|gemeisselt|aufgestemmt|abgestemmt|aufgeschlagen|abgeschlagen)/i, 'Bohrhammer'],
+  [/(geflext|abgeflext|angeflext)/i, 'Winkelschleifer'],
+  [/(nivelliert|ausgelasert|eingelasert|mit laser)/i, 'Rotationslaser'],
+  [/(getrocknet|trocknung|aufgeheizt)/i, 'Bautrockner']
+];
+function parseAnfahrt(t){
+  t = String(t || ''); let an = '', info = '';
+  if (/(keine|ohne|ohne eine|nicht)\s+(anfahrt|anreise|anfahrtskosten)|anfahrt\s*(nein|entfällt|entfaellt|keine)/i.test(t)) an = 'Nein';
+  else if (/(anfahrt|angefahren|anreise|angereist|hinfahrt|rückfahrt|fahrzeit)/i.test(t)) an = 'Ja';
+  if (an === 'Ja'){
+    const m = t.match(/(?:anfahrt|anreise|fahrzeit|hinfahrt)\D{0,25}?(\d+(?:[.,]\d+)?)\s*(km|kilometer|minuten|min|stunden|std|h)\b/i) || t.match(/(\d+(?:[.,]\d+)?)\s*(km|kilometer|minuten|min|stunden|std|h)\s*(?:anfahrt|anreise|fahrzeit)/i);
+    if (m) info = m[1].replace('.', ',') + ' ' + (/^(km|kilometer)$/i.test(m[2]) ? 'km' : /^(min|minuten)$/i.test(m[2]) ? 'Min.' : 'Std');
+  }
+  return { anfahrt: an, info };
+}
+
+/* Live-Erkennung beim Sprechen/Tippen: Anfahrt wird sofort eingetragen */
+function liveScan(){
+  const an = parseAnfahrt($('diktat').value + ' ' + $('taetigkeit').value);
+  const sel = $('anfahrt'), inf = $('anfahrtInfo');
+  if (an.anfahrt && (!sel.value || sel.dataset.auto === '1') && sel.value !== an.anfahrt){
+    sel.value = an.anfahrt; sel.dataset.auto = '1'; toast('Anfahrt erkannt: ' + an.anfahrt + (an.info ? ' (' + an.info + ')' : ''), 3000);
+  }
+  if (an.info && sel.dataset.auto === '1' && (!inf.value || inf.dataset.auto === '1')){ inf.value = an.info; inf.dataset.auto = '1'; }
+}
+$('anfahrt').addEventListener('change', () => { $('anfahrt').dataset.auto = ''; });
+$('anfahrtInfo').addEventListener('input', () => { $('anfahrtInfo').dataset.auto = ''; });
+['diktat', 'taetigkeit'].forEach(id => $(id).addEventListener('input', liveScan));
+
 /* ---------- Auswertung (lokal): Katalog + Mustererkennung ---------- */
 function parseLocal(text0){
   const text = applyVocab(text0);
@@ -485,7 +552,12 @@ function parseLocal(text0){
     if (out.ger.some(x => sq(x.name) === sq(e.n))) return;
     if (e.tt.some(x => x.s.length >= 4 && new RegExp(x.re, 'i').test(t))) push('ger', e.n, null, e.u === 'Tage' ? 'Tage' : 'Std', e.n);
   });
-  return { taetigkeit: text.trim(), material: out.mat, geraete: out.ger, bemerkung: '' };
+  // D) Geräte aus Tätigkeiten ableiten: "abgesaugt" -> Bausauger usw.
+  VERB_GER.forEach(([re, name]) => {
+    if (re.test(text) && !out.ger.some(x => sq(x.name) === sq(name))){ const e = CAT.get('ger').find(x => x.n === name); if (e) push('ger', e.n, null, e.u === 'Tage' ? 'Tage' : 'Std', e.n); }
+  });
+  const an = parseAnfahrt(text);
+  return { taetigkeit: text.trim(), material: out.mat, geraete: out.ger, bemerkung: '', anfahrt: an.anfahrt, anfahrtInfo: an.info };
 }
 
 /* ---------- Auswertung (Claude) ---------- */
@@ -494,8 +566,8 @@ async function parseAI(text, key){
   const list = k => CAT.get(k).map(e => `${e.n} (${e.u})`).join(', ');
   const learned = ['mat', 'ger'].flatMap(k => Object.entries(d.alias[k]).map(([raw, t]) => `${raw} → ${t.n}`)).concat(Object.entries(d.vocab).map(([a, b]) => `${a} → ${b}`));
   const sys = `Du bist Assistent für einen Fliesenlegerbetrieb und wertest diktierte Tagesrapporte aus (die Spracherkennung macht oft Fehler, z. B. getrennt geschriebene Wörter). Antworte NUR mit gültigem JSON ohne Erklärung, Format:
-{"taetigkeit":"sachlich formulierte, sprachlich korrigierte Zusammenfassung der ausgeführten Arbeiten in kurzen Sätzen oder Stichpunkten (Raum/Bereich, Arbeitsschritte)","material":[{"name":"","menge":0,"einheit":""}],"geraete":[{"name":"","menge":0,"einheit":""}],"bemerkung":""}
-Regeln: Verbrauchte Werkstoffe/Material (Fliesen, Kleber, Fugenmasse, Profile, Grundierung, Abdichtung …) kommen in "material", Maschinen/Werkzeuge/Gerüste in "geraete". Einheiten bei material nur aus: ${MAT_UNITS.join(', ')}. Einheiten bei geraete nur aus: ${GER_UNITS.join(', ')}. Mengen als Zahl (Punkt als Dezimaltrenner). Quadratmeter = m², laufende Meter = lfm, Kilogramm = kg, Säcke = Sack. Format/Größe/Typ gehört in den Namen (z. B. "Bodenfliesen 60x60"). Erfinde NIE Mengen: ist keine genannt, setze menge null. Geräte ohne Zeitangabe trotzdem aufnehmen (menge null). "bemerkung" nur für Mängel, Behinderungen, Absprachen, Zusatzleistungen, sonst leer.
+{"taetigkeit":"sachlich formulierte, sprachlich korrigierte Zusammenfassung der ausgeführten Arbeiten in kurzen Sätzen oder Stichpunkten (Raum/Bereich, Arbeitsschritte)","material":[{"name":"","menge":0,"einheit":""}],"geraete":[{"name":"","menge":0,"einheit":""}],"bemerkung":"","anfahrt":"Ja|Nein|","anfahrtInfo":""}
+Regeln: "anfahrt": "Ja", wenn eine Anfahrt/Fahrt zur Baustelle erwähnt wird, "Nein" wenn ausdrücklich keine, sonst leer; "anfahrtInfo" = Kilometer/Fahrzeit, falls genannt. Geräte werden auch aus Tätigkeiten abgeleitet (z. B. „Boden abgesaugt“ → Bausauger/Staubsauger, „Fliesen zugeschnitten“ → Fliesenschneider/Nassschneider, „Löcher gebohrt“ → Bohrmaschine) und mit menge null aufgenommen. Verbrauchte Werkstoffe/Material (Fliesen, Kleber, Fugenmasse, Profile, Grundierung, Abdichtung …) kommen in "material", Maschinen/Werkzeuge/Gerüste in "geraete". Einheiten bei material nur aus: ${MAT_UNITS.join(', ')}. Einheiten bei geraete nur aus: ${GER_UNITS.join(', ')}. Mengen als Zahl (Punkt als Dezimaltrenner). Quadratmeter = m², laufende Meter = lfm, Kilogramm = kg, Säcke = Sack. Format/Größe/Typ gehört in den Namen (z. B. "Bodenfliesen 60x60"). Erfinde NIE Mengen: ist keine genannt, setze menge null. Geräte ohne Zeitangabe trotzdem aufnehmen (menge null). "bemerkung" nur für Mängel, Behinderungen, Absprachen, Zusatzleistungen, sonst leer.
 Bekannte Materialnamen (Standard-Einheit): ${list('mat')}.
 Bekannte Geräte: ${list('ger')}.
 Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- oder Hörfehlern.${learned.length ? '\nGelernte Zuordnungen (gesprochen → richtig): ' + learned.join('; ') + '.' : ''}`;
@@ -522,7 +594,7 @@ Verwende exakt diese Namen, wenn der Gegenstand gemeint ist, auch bei Schreib- o
       return { name, menge: num(x.menge), einheit: un, raw: rawName };
     });
   };
-  return { taetigkeit: applyVocab(o.taetigkeit || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '' };
+  return { taetigkeit: applyVocab(o.taetigkeit || text), material: clean(o.material, 'mat'), geraete: clean(o.geraete, 'ger'), bemerkung: o.bemerkung || '', anfahrt: /^(ja|nein)$/i.test(o.anfahrt || '') ? cap(String(o.anfahrt).toLowerCase()) : '', anfahrtInfo: o.anfahrtInfo || '' };
 }
 
 $('ki').onclick = async () => {
@@ -547,7 +619,9 @@ $('ki').onclick = async () => {
     $(kind).innerHTML = ''; have.forEach(x => addRow(kind, { ...x, keepUnit: true })); add.forEach(x => addRow(kind, { ...x, keepUnit: true }));
     if (!have.length && !add.length) addRow(kind);
   };
-  merge('mat', res.material); merge('ger', res.geraete); markDirty();
+  merge('mat', res.material); merge('ger', res.geraete);
+  if (res.anfahrt && !$('anfahrt').value){ $('anfahrt').value = res.anfahrt; if (res.anfahrtInfo && !$('anfahrtInfo').value) $('anfahrtInfo').value = res.anfahrtInfo; }
+  updateStd(); markDirty();
   toast(`Ausgewertet (${how}): ${res.material.length} Material, ${res.geraete.length} Geräte – bitte prüfen. Korrekturen merkt sich die App.`, 5000);
 };
 
@@ -594,7 +668,7 @@ function openPicker(mode, kind){
   $('picker').style.display = 'flex'; renderPicker();
 }
 function closePicker(){
-  if (PK.mode === 'ma'){ $('mitarbeiter').value = [...PK.sel].join(', '); markDirty(); }
+  if (PK.mode === 'ma'){ $('mitarbeiter').value = [...PK.sel].join(', '); markDirty(); updateStd(); }
   $('picker').style.display = 'none';
   if (PK.last){ const q = PK.last.querySelector('.q'); PK.last.scrollIntoView({ block: 'center' }); setTimeout(() => q.focus(), 50); }
 }
@@ -791,16 +865,19 @@ function buildPDF(r){
 
   head();
   let zeit = '–';
-  if (r.von && r.bis){
-    const tm = x => { const [h, m] = x.split(':'); return +h * 60 + +m; };
-    const mins = tm(r.bis) - tm(r.von) - (num(r.pause) || 0);
-    zeit = `${r.von}–${r.bis} Uhr` + (r.pause ? `, Pause ${r.pause} Min.` : '') + (mins > 0 ? ` = ${Math.floor(mins / 60)} Std ${pad(mins % 60)} Min` : '');
-  } else if (r.von || r.bis) zeit = (r.von ? 'ab ' + r.von : 'bis ' + r.bis) + ' Uhr';
+  const wt = workTime(r);
+  if (r.von && r.bis) zeit = `${r.von}–${r.bis} Uhr` + (r.pause ? `, Pause ${r.pause} Min.` : '');
+  else if (r.von || r.bis) zeit = (r.von ? 'ab ' + r.von : 'bis ' + r.bis) + ' Uhr';
+  const ges = wt ? `${fmtHM(wt.man)} (${fmtDec(wt.man)})` : '–';
+  const anf = r.anfahrt ? (r.anfahrt + (r.anfahrtInfo ? ' – ' + r.anfahrtInfo : '')) : 'nicht angegeben';
   cellRow([{ l: 'Datum', v: fmtDate(r.datum), f: .30 }, { l: 'Rapport-Nr.', v: r.nr, f: .30 }, { l: 'Projekt-/Auftrags-Nr.', v: r.projekt, f: .40 }]);
   cellRow([{ l: 'Objekt / Baustelle', v: r.objekt, f: .60 }, { l: 'Wetter', v: r.wetter, f: .40 }]);
   cellRow([{ l: 'Adresse der Baustelle', v: r.adresse, f: .50 }, { l: 'Auftraggeber / Kunde', v: r.kunde, f: .50 }]);
   cellRow([{ l: 'Bauleiter / Ansprechpartner', v: r.bauleiter, f: .50 }, { l: 'Mitarbeiter', v: r.mitarbeiter, f: .50 }]);
-  cellRow([{ l: 'Arbeitszeit', v: zeit, f: 1 }]);
+  cellRow([{ l: 'Arbeitszeit', v: zeit + (wt ? ' = ' + fmtHM(wt.mins) : ''), f: 1 }]);
+  if (wt && wt.list[0].name) wt.list.forEach(x => cellRow([{ l: 'Stunden Mitarbeiter', v: x.name, f: .6 }, { l: 'Std', v: fmtHM(x.mins) + ' (' + fmtDec(x.mins) + ')', f: .4 }]));
+  cellRow([{ l: 'Gesamtstunden' + (wt && wt.n > 1 ? ' (alle Mitarbeiter)' : ''), v: ges, f: 1 }]);
+  cellRow([{ l: 'Anfahrt', v: anf, f: 1 }]);
   y += 7;
 
   h2('Ausgeführte Arbeiten'); para(r.taetigkeit);
@@ -896,6 +973,7 @@ $('mSave').onclick = async () => {
 $('send').onclick = () => {
   const r = collect();
   if (!hasContent(r)) return toast('Der Rapport ist noch leer.');
+  if (!r.anfahrt && !confirm('Anfahrt ist nicht angegeben (Ja/Nein). Trotzdem PDF erstellen?')) return;
   if (!r.sig1 && !confirm('Es fehlt die Unterschrift des Mitarbeiters. Trotzdem PDF erstellen?')) return;
   if (!r.nr){ r.nr = nextNr(); $('nr').value = r.nr; }
   DB.put(r).then(() => { dirty = false; }).catch(() => {});

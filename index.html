@@ -78,6 +78,7 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
 .pit small{color:#6b7785}.pit.on{background:#d5f0df;border-color:var(--gruen)}
 .it2{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rand)}
 .it2 .m{flex:1;min-width:0;display:flex;flex-direction:column}.it2 .btn{padding:6px 10px}
+.mst{display:flex;align-items:center;gap:8px;margin:4px 0}.mst span:first-child{flex:1}.mst input{width:80px;text-align:right;padding:6px}#stdTot{margin-top:6px}
 </style>
 </head>
 <body>
@@ -117,6 +118,11 @@ canvas.sig{width:100%;height:150px;border:1px dashed #8a96a5;border-radius:8px;b
       <div><label for="von">Beginn</label><input type="time" id="von"></div>
       <div><label for="bis">Ende</label><input type="time" id="bis"></div>
       <div><label for="pause">Pause (Min.)</label><input type="number" inputmode="numeric" id="pause" placeholder="30" min="0"></div>
+    </div>
+    <div class="hint" id="stdInfo" style="font-size:14px;color:var(--text);background:#eef3f8;border-radius:8px;padding:8px;margin-top:8px"></div>
+    <div class="row">
+      <div><label for="anfahrt">Anfahrt</label><select id="anfahrt"><option value="">– bitte wählen –</option><option>Ja</option><option>Nein</option></select></div>
+      <div style="flex:2"><label for="anfahrtInfo">Anfahrt-Angaben (km / Fahrzeit)</label><input id="anfahrtInfo" placeholder="z. B. 35 km oder 45 Min." autocomplete="off"></div>
     </div>
   </section>
 
